@@ -35,6 +35,7 @@
 #include <cstdio>
 #include <stdarg.h>
 #include <math.h>
+#include <inttypes.h>
 
 #ifdef _WIN32  /*modifications for Windows compilation */
 #include <glib.h>
@@ -64,6 +65,10 @@
 #include "lib/dnssd.h"
 #include "renderers/video_renderer.h"
 #include "renderers/audio_renderer.h"
+#ifdef DBUS
+#include <dbus/dbus.h>
+#endif
+
 
 #define VERSION "1.72"
 
@@ -175,6 +180,28 @@ static guint missed_feedback_limit = MISSED_FEEDBACK_LIMIT;
 static guint missed_feedback = 0;
 static guint playbin_version = DEFAULT_PLAYBIN_VERSION;
 static bool reset_httpd = false;
+
+//Support for D-Bus-based screensaver inhibition (org.freedesktop.ScreenSaver) 
+static unsigned int scrsv;
+#ifdef DBUS 
+/* these strings can be changed at startup if a non-conforming Desktop Environmemt is detected */
+static std::string dbus_service = "org.freedesktop.ScreenSaver";
+static std::string dbus_path = "/org/freedesktop/ScreenSaver";
+static std::string dbus_interface = "org.freedesktop.ScreenSaver";
+static std::string dbus_inhibit = "Inhibit";
+static std::string dbus_uninhibit = "UnInhibit";
+static DBusConnection *dbus_connection = NULL;
+static dbus_uint32_t dbus_cookie = 0;
+static DBusPendingCall *dbus_pending = NULL;
+static bool dbus_last_message = false;
+static const char *appname = DEFAULT_NAME;
+static const char *reason_always = "mirroring client: inhibit always";
+static const char *reason_active = "actively receiving video";
+static int activity_count;
+static double activity_threshold = 500000.0;  // threshold for FPSdata item txUsageAvg to classify mirror video as "active"
+#define MAX_ACTIVITY_COUNT 60
+#endif
+
 /* logging */
 
 static void log(int level, const char* format, ...) {
@@ -203,6 +230,73 @@ static void log(int level, const char* format, ...) {
 #define LOGI(...) log(LOGGER_INFO, __VA_ARGS__)
 #define LOGW(...) log(LOGGER_WARNING, __VA_ARGS__)
 #define LOGE(...) log(LOGGER_ERR, __VA_ARGS__)
+
+#ifdef DBUS
+static void dbus_screensaver_inhibiter(bool inhibit) {
+    g_assert(inhibit != dbus_last_message);
+    g_assert(scrsv);
+    /* receive reply from previous request, whenever that was sent
+     * (may have been sent hours ago ... !) 
+     * (code modeled on vlc/modules/misc/inhibit/dbus.c) */
+    if (dbus_pending != NULL) {
+        DBusMessage *reply;
+        dbus_pending_call_block(dbus_pending);
+        reply = dbus_pending_call_steal_reply(dbus_pending);
+        dbus_pending_call_unref(dbus_pending);
+        dbus_pending = NULL;
+        if (reply != NULL) {
+            if (!dbus_message_get_args(reply, NULL,
+                                       DBUS_TYPE_UINT32, &dbus_cookie,
+                                       DBUS_TYPE_INVALID)) {
+                dbus_cookie = 0;
+            }
+            dbus_message_unref(reply);
+        }
+        LOGD("screen_saver: got D-Bus cookie %" PRIu32, (uint32_t) dbus_cookie);
+    }
+    
+    if (!dbus_cookie && !inhibit) {
+        return; /* nothing to do */
+    }
+	  
+    /* send request */
+    const char *dbus_method = inhibit ? dbus_inhibit.c_str() : dbus_uninhibit.c_str();
+    DBusMessage *dbus_message = dbus_message_new_method_call(dbus_service.c_str(),
+                                                             dbus_path.c_str(),
+                                                             dbus_interface.c_str(),
+                                                             dbus_method);
+    g_assert (dbus_message);
+    
+    if (inhibit) {
+        dbus_bool_t ret;
+        const char *reason = (scrsv == 1) ? reason_active : reason_always;
+	
+        ret = dbus_message_append_args(dbus_message,
+                                       DBUS_TYPE_STRING, &appname,
+                                       DBUS_TYPE_STRING, &reason,
+                                       DBUS_TYPE_INVALID);
+	g_assert(ret);
+
+        ret =  dbus_connection_send_with_reply(dbus_connection, dbus_message, &dbus_pending, -1);
+        if (!ret) {
+            dbus_pending = NULL;
+        }
+    } else {
+        g_assert(dbus_cookie);
+        LOGD("screen_saver: releasing D-Bus cookie %" PRIu32, (uint32_t) dbus_cookie);
+        if (dbus_message_append_args(dbus_message,
+                                     DBUS_TYPE_UINT32, &dbus_cookie,
+                                     DBUS_TYPE_INVALID)
+            && dbus_connection_send(dbus_connection, dbus_message, NULL)) {
+            dbus_cookie = 0;
+        }
+    }
+    
+    dbus_connection_flush(dbus_connection);
+    dbus_message_unref(dbus_message);
+    dbus_last_message = inhibit;
+}
+#endif
 
 static bool file_has_write_access (const char * filename) {
     bool exists = false;
@@ -683,6 +777,7 @@ static void print_info (char *name) {
     printf("-h265     Support h265 (4K) video (with h265 versions of h264 plugins)\n");
     printf("-hls [v]  Support HTTP Live Streaming (currently Youtube video only) \n");
     printf("          v = 2 or 3 (default 3) optionally selects video player version\n");
+    printf("-scrsv n  Screensaver override n: 0=off 1=on during activity 2=always on\n");
     printf("-pin[xxxx]Use a 4-digit pin code to control client access (default: no)\n");
     printf("          default pin is random: optionally use fixed pin xxxx\n");
     printf("-reg [fn] Keep a register in $HOME/.uxplay.register to verify returning\n");
@@ -947,6 +1042,19 @@ static void parse_arguments (int argc, char *argv[]) {
                     }
                 }
             }
+        } else if (arg == "-scrsv") {
+            if (!option_has_value(i, argc, argv[i], argv[i+1])) exit(1);
+            unsigned int n = 0;
+            if (!get_value(argv[++i], &n) || n > 2) {
+                fprintf(stderr, "invalid \"-scrsv %s\"; values 0, 1, 2 allowed\n", argv[i]);
+                exit(1);
+            }
+#ifdef DBUS
+            scrsv = n;
+#else
+            fprintf(stderr,"invalid: option \"-scrsv\" is currently only implemented for Linux/*BSD systems with D-Bus service\n");
+            exit(1);
+#endif
         } else if (arg == "-vsync") {
             video_sync = true;
 	    if (i <  argc - 1) {
@@ -1866,6 +1974,27 @@ extern "C" void video_process (void *cls, raop_ntp_t *ntp, video_decode_struct *
     }
 }
 
+#ifdef DBUS
+extern "C" void mirror_video_activity  (void *cls, double *txusage) {
+    if (scrsv != 1) {
+        return;
+    }
+    if (*txusage > activity_threshold) {
+        if (activity_count < MAX_ACTIVITY_COUNT) {
+            activity_count++;
+        } else if (activity_count == MAX_ACTIVITY_COUNT  && !dbus_last_message) {
+	    dbus_screensaver_inhibiter(true);
+        }
+    } else {
+      if (activity_count > 0) {
+          activity_count--;
+      } else if (activity_count == 0 && dbus_last_message) {
+          dbus_screensaver_inhibiter(false);
+      }
+    }
+}
+#endif
+
 extern "C" void video_pause (void *cls) {
     if (use_video) {
         video_renderer_pause();
@@ -2179,6 +2308,9 @@ static int start_raop_server (unsigned short display[5], unsigned short tcp[3], 
     raop_cbs.export_dacp = export_dacp;
     raop_cbs.video_reset = video_reset;
     raop_cbs.video_set_codec = video_set_codec;
+#ifdef DBUS
+    raop_cbs.mirror_video_activity = mirror_video_activity;
+#endif
     raop_cbs.on_video_play = on_video_play;
     raop_cbs.on_video_scrub = on_video_scrub;
     raop_cbs.on_video_rate = on_video_rate;
@@ -2310,6 +2442,7 @@ static void read_config_file(const char * filename, const char * uxplay_name) {
         fprintf(stderr,"UxPlay: failed to open configuration file at %s\n", config_file.c_str());
     }
     if (options.size() > 1) {
+
         int argc = options.size();
         char **argv = (char **) malloc(sizeof(char*) * argc);
         for (int i = 0; i < argc; i++) {
@@ -2319,6 +2452,7 @@ static void read_config_file(const char * filename, const char * uxplay_name) {
         free (argv);
     }
 }
+
 #ifdef GST_MACOS
 /* workaround for GStreamer >= 1.22 "Official Builds" on macOS */
 #include <TargetConditionals.h>
@@ -2393,6 +2527,52 @@ int main (int argc, char *argv[]) {
 
     LOGI("UxPlay %s: An Open-Source AirPlay mirroring and audio-streaming server.", VERSION);
 
+#ifdef DBUS
+    if (scrsv) {
+        DBusError dbus_error;
+        dbus_error_init(&dbus_error);
+        dbus_connection = dbus_bus_get(DBUS_BUS_SESSION, &dbus_error);
+        if (dbus_error_is_set(&dbus_error)) {
+            dbus_error_free(&dbus_error);
+            scrsv = 0;
+            LOGI ("D-Bus session not found: screensaver inhibition option (\"-scrsv\") will not be active");
+        }
+    }
+    if (scrsv) {
+        LOGD ("D-Bus session support is available, connection %p", dbus_connection);
+        std::string desktop = getenv("XDG_CURRENT_DESKTOP"); 
+        LOGD("Desktop Environment:  %s", desktop.c_str());
+
+        /* if dbus_service, dbus_path, dbus_interface, dbus_inhibit, dbus_uninhibit *
+         * in the detected  Desktop Environments are still non-conforming to the    *
+         * org.freedesktop.ScreenSaver interface, they can be modifed here          */
+
+        /* some desktop environments (e.g. Xfce 4, Mate) modify the D-Bus service name */
+        std::string name;
+        if (strstr(desktop.c_str(), "XFCE")) {
+            name = "xfce";
+        } else if (strstr(desktop.c_str(), "MATE")) {
+            name = "mate";
+        }
+  
+        if (!name.empty()) {
+            size_t pos;
+            std::string replace_word = "freedesktop";
+            pos = dbus_service.find(replace_word);
+            dbus_service.replace(pos, replace_word.size(), name);
+            pos = dbus_path.find(replace_word);
+            dbus_path.replace(pos, replace_word.size(), name);
+            pos = dbus_interface.find(replace_word);
+            dbus_interface.replace(pos, replace_word.size(), name);
+        }
+
+        LOGI("Will attempt to use %s (D-Bus screensaver inhibition) %s", dbus_service.c_str(),
+             (scrsv == 1 ? "only during screen activity" : "always"));
+        if (scrsv == 2) {
+            dbus_screensaver_inhibiter(true);
+        }
+    }
+#endif
     if (audiosink == "0") {
         use_audio = false;
         dump_audio = false;
@@ -2667,4 +2847,17 @@ int main (int argc, char *argv[]) {
     if (metadata_filename.length()) {
 	remove (metadata_filename.c_str());
     }
+#ifdef DBUS
+    if (dbus_connection) {
+        LOGD("Ending D-Bus connection %p", dbus_connection);
+        if (dbus_last_message) {
+            dbus_screensaver_inhibiter(false);
+        }
+        if (dbus_pending) {
+            dbus_pending_call_cancel(dbus_pending);
+            dbus_pending_call_unref(dbus_pending);
+        }
+        dbus_connection_unref(dbus_connection);
+    }
+#endif 
 }

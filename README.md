@@ -2,6 +2,12 @@
 
 ### **Now developed at the GitHub site <https://github.com/FDH2/UxPlay> (where ALL user issues should be posted, and latest versions can be found).**
 
+-   **NEW on github**: (for Linux/*BSD Desktop Environments using D-Bus). New option `-scrsv <n>` provides screensaver inhibition (e.g., to
+    prevent screensaver function while watching mirrored videos without keyboard or mouse
+    activity): n = 0 (off) n=1 (on during video activity) n=2 (always on while UxPlay is running).
+    Tested on Gnome/KDE/Cinnamon/Mate/Xfce 4: may need adjustment for other Desktop Environments (please report).
+    (watch output of `dbus-monitor` to verify that inhibition is working). _Might not work on Wayland_.
+
 -   **NEW on github**:  option -ca (with no filename given) will now render
     Apple Music cover art (in audio-only mode) inside
     UxPlay. (-ca `<filename>` will continue to export cover art for
@@ -113,6 +119,9 @@ status](https://repology.org/badge/vertical-allrepos/uxplay.svg)](https://repolo
     pipewiresink" or "vs waylandsink" as defaults to the file. *(Output
     from terminal commands "ps waux \| grep pulse" or "pactl info" will
     contain "pipewire" if your Linux/BSD system uses it).*
+
+-   For Linux/*BSD systems using D-Bus, the option `-scrsv 1` inhibits the screensaver while
+    there is video activity on UxPlay (`-scrsv 2` inhibits it whenever UxPlay is running).
 
 -   For Linux systems using systemd, there is a **systemd** service file **uxplay.service**
     found in the UxPlay top directory of the distribution, and also installed
@@ -1036,6 +1045,18 @@ allows selection of the version of GStreamer's
 is the recommended player, but if some videos fail to play, you can try
 with version 2.)_
 
+**-scrsv n**. (since 1.73) (So far, only implemented
+on Linux/*BSD systems using D-Bus). Inhibit the screensaver in the
+absence of keyboard input (e.g., while watching video), using the
+org.freedesktop.ScreenSaver D-Bus service:
+n = 0: (off) n= 1 (on during video activity) n=2 (always on).
+_Note: to verify this feature is working, you can use `dbus-monitor`
+to view events on the D-Bus; depending on the Desktop Environment,
+commands like
+`gnome-session-inhibit -l`,  ``xfce4-screensaver-commannd -q``, etc.,
+should list UxPlay when it is inhibiting
+the screensaver._
+
 **-pin \[nnnn\]**: (since v1.67) use Apple-style (one-time) "pin"
 authentication when a new client connects for the first time: a
 four-digit pin code is displayed on the terminal, and the client screen
@@ -1752,8 +1773,9 @@ introduced 2017, running tvOS 12.2.1), so it does not seem to matter
 what version UxPlay claims to be.
 
 # Changelog
-xxxx  2025-07-07 Render Audio cover-art inside UxPlay with -ca option (no file
-specified).
+xxxx  2025-08-11 Render Audio cover-art inside UxPlay with -ca option (no file
+specified). (D-Bus based) option -scrsv <n> to inhibit screensaver while UxPlay
+is running (Linux/*BSD only).
 
 1.72.2 2025-07-07  Fix bug (typo) in DNS_SD advertisement introduced with -pw
 option.  Update llhttp to v 9.3.0
