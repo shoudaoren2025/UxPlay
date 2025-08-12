@@ -447,19 +447,30 @@ http_handler_action(raop_conn_t *conn, http_request_t *request, http_response_t 
         char *header_str = NULL;
         http_request_get_header_string(request, &header_str);
         printf("\n\n%s\n", header_str);
-        bool is_plist = (bool) strstr(header_str,"apple-binary-plist");
+        bool data_is_plist = (strstr(header_str,"apple-binary-plist") != NULL);
         free(header_str);
-        if (is_plist) {
+        if (data_is_plist) {
             int request_datalen;
             const char *request_data = http_request_get_data(request, &request_datalen);
             plist_t req_root_node = NULL;
             plist_from_bin(request_data, request_datalen, &req_root_node);
-            char * plist_xml;
-            uint32_t plist_len;
+            char *plist_xml = NULL;
+            char *stripped_xml = NULL;
+            uint32_t plist_len = 0;
             plist_to_xml(req_root_node, &plist_xml, &plist_len);
-            plist_xml = utils_strip_data_from_plist_xml(plist_xml);
-            printf("%s", plist_xml);	
-            free(plist_xml);
+            printf("plist_len = %u\n", plist_len);
+            stripped_xml = utils_strip_data_from_plist_xml(plist_xml);
+            printf("%s", stripped_xml ? stripped_xml : plist_xml);
+            if (stripped_xml) {
+                free(stripped_xml);
+            }
+            if (plist_xml) {
+#ifdef PLIST_230
+                plist_mem_free(plist_xml);
+#else
+                plist_to_xml_free(plist_xml);
+#endif
+            }
             plist_free(req_root_node);
         }
         assert(0);
