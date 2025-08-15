@@ -765,6 +765,7 @@ raop_handler_setup(raop_conn_t *conn,
         bool old_protocol = false;
 #ifdef OLD_PROTOCOL_CLIENT_USER_AGENT_LIST    /* set in global.h */
         if (strstr(OLD_PROTOCOL_CLIENT_USER_AGENT_LIST, user_agent)) old_protocol = true;
+        if (strstr(user_agent, "AirMyPC")) old_protocol = true;   //AirMyPC/7200 still uses old protocol: unlikely to change (?)
 #endif
         if  (old_protocol) {    /* some windows AirPlay-client emulators use old AirPlay 1 protocol with unhashed AES key */
             logger_log(conn->raop->logger, LOGGER_INFO, "Client identifed as using old protocol (unhashed) AES audio key)");
