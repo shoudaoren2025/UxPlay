@@ -429,6 +429,19 @@ raop_rtp_thread_udp(void *arg)
     logger_log(raop_rtp->logger, LOGGER_DEBUG, "raop_rtp start_time = %8.6f (raop_rtp audio)",
                ((double) raop_rtp->ntp_start_time) / SEC);
 
+    char type[8] = {'\0'};
+    switch (raop_rtp->ct) {
+    case 2:
+        snprintf(type, 8, "ALAC");
+        break;
+    case 8:
+        snprintf(type, 8, "AAC_ELD");
+        break;
+    default:
+        snprintf(type, 8, "TYPE=?");
+        break;
+    }
+    
     while(1) {
         fd_set rfds;
         struct timeval tv;
@@ -605,7 +618,7 @@ raop_rtp_thread_udp(void *arg)
                  raop_rtp->initial_sync = true;
             }	    
 
-            if (packetlen == 16 && memcmp(packet + 12, no_data_marker, 4) == 0) {
+            if (packetlen == 12 ||(packetlen == 16 && memcmp(packet + 12, no_data_marker, 4) == 0)) {
                 /* this is a "no data" packet */
 	        /* the first such packet could be used to provide the initial rtptime and seqnum formerly given in the RECORD request */
                 continue;
@@ -640,9 +653,9 @@ raop_rtp_thread_udp(void *arg)
                         uint64_t ntp_now = raop_ntp_get_local_time();
                         int64_t latency = (audio_data.ntp_time_local ? ((int64_t) ntp_now) - ((int64_t) audio_data.ntp_time_local) : 0); 
                         logger_log(raop_rtp->logger, LOGGER_DEBUG,
-                                   "raop_rtp audio: now = %8.6f, ntp = %8.6f, latency = %9.6f, ts = %8.6f, rtp_time=%u seqnum = %u",
+                                   "raop_rtp audio: now = %8.6f, ntp = %8.6f, latency = %9.6f, ts = %8.6f, rtp_time=%u seqnum = %5u %s %d",
                                    (double) ntp_now / SEC, (double) audio_data.ntp_time_local / SEC, (double) latency / SEC,
-                                   (double) audio_data.ntp_time_remote /SEC, rtp_timestamp, seqnum);
+                                   (double) audio_data.ntp_time_remote /SEC, rtp_timestamp, seqnum, type, payload_size);
                     }
 
                     raop_rtp->callbacks.audio_process(raop_rtp->callbacks.cls, raop_rtp->ntp, &audio_data);
