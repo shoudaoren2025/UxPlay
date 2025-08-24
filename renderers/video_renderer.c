@@ -54,6 +54,11 @@ static gboolean hls_seek_enabled;
 static gboolean hls_playing;
 static gboolean hls_buffer_empty;
 static gboolean hls_buffer_full;
+static int type_264;
+static int type_265;
+static int type_hls;
+static int type_jpeg;
+
 
 
 typedef enum {
@@ -238,6 +243,10 @@ void  video_renderer_init(logger_t *render_logger, const char *server_name, vide
     hls_duration = -1;
     hls_buffer_empty = TRUE;
     hls_buffer_empty = FALSE;
+    type_hls = -1;
+    type_264 = -1;
+    type_265 = -1;
+    type_jpeg = -1;
     
 
     /* this call to g_set_application_name makes server_name appear in the  X11 display window title bar, */
@@ -284,6 +293,7 @@ void  video_renderer_init(logger_t *render_logger, const char *server_name, vide
             logger_log(logger, LOGGER_INFO, "Will use GStreamer playbin version %u to play HLS streamed video", playbin_version);	    
             g_assert(renderer_type[i]->pipeline);
             renderer_type[i]->codec = hls;
+            type_hls = i;
             /* if we are not using an autovideosink, build a videosink based on the string "videosink" */
             if (!auto_videosink) { 
                 GstElement *playbin_videosink = make_video_sink(videosink, videosink_options);  
@@ -307,14 +317,17 @@ void  video_renderer_init(logger_t *render_logger, const char *server_name, vide
                 jpeg_pipeline = true;
                 renderer_type[i]->codec = jpeg;
                 caps = gst_caps_from_string(jpeg_caps);
+                type_jpeg = i;
                 break;
             case 1:
                 renderer_type[i]->codec = h264;
                 caps = gst_caps_from_string(h264_caps);
+                type_264 = i;
                 break;
             case 2:
                 renderer_type[i]->codec = h265;
                 caps = gst_caps_from_string(h265_caps);
+                type_265 = i;
                 break;
             default:
                 g_assert(0);
@@ -582,9 +595,9 @@ void video_renderer_stop() {
 
 static void video_renderer_destroy_instance(video_renderer_t *renderer) {
     if (renderer) {
-        logger_log(logger, LOGGER_DEBUG,"destroying renderer instance %p", renderer);
+        logger_log(logger, LOGGER_DEBUG,"destroying renderer instance %p codec=%s ", renderer, renderer->codec);
         GstState state;
-	GstStateChangeReturn ret;
+        GstStateChangeReturn ret;
         gst_element_get_state(renderer->pipeline, &state, NULL, 100 * GST_MSECOND);
         logger_log(logger, LOGGER_DEBUG,"pipeline state is %s", gst_element_state_get_name(state));
         if (state != GST_STATE_NULL) {
@@ -884,17 +897,21 @@ int video_renderer_choose_codec (bool video_is_jpeg, bool video_is_h265) {
     video_renderer_t *renderer_used = NULL;
     g_assert(!hls_video);
     if (video_is_jpeg) {
-        renderer_used = renderer_type[0];
-    } else if (n_renderers == 2) {
-        if (video_is_h265) {
-            logger_log(logger, LOGGER_ERR, "video is h265 but the -h265 option was not used");
-            return -1;
-        }
-        renderer_used = renderer_type[1];
+        g_assert(type_jpeg != -1);
+        renderer_used = renderer_type[type_jpeg];
     } else {
-        renderer_used = video_is_h265 ? renderer_type[2] : renderer_type[1];
+        if (video_is_h265) {
+            if (type_265 == -1) {
+                logger_log(logger, LOGGER_ERR, "video is h265 but the -h265 option was not used");
+                return -1;
+            }
+            renderer_used = renderer_type[type_265];
+        } else {
+            g_assert(type_264 != -1);
+            renderer_used = renderer_type[type_264];
+        }
     }
-    if (renderer_used == NULL) { 
+    if (renderer_used == NULL) {
         return -1;
     } else if (renderer_used == renderer) {
         return 0;
@@ -911,7 +928,7 @@ int video_renderer_choose_codec (bool video_is_jpeg, bool video_is_h265) {
     logger_log(logger, LOGGER_DEBUG, "video_pipeline state change from %s to %s\n",
                gst_element_state_get_name (old_state),gst_element_state_get_name (new_state));
     gst_video_pipeline_base_time = gst_element_get_base_time(renderer->appsrc);
-    if (n_renderers > 2 && renderer == renderer_type[2]) {
+    if (strstr(renderer->codec, h265)) {
         logger_log(logger, LOGGER_INFO, "*** video format is h265 high definition (HD/4K) video %dx%d", width, height);
     }
     /* destroy unused renderers */
