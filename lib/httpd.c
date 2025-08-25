@@ -344,7 +344,7 @@ httpd_thread(void *arg)
         struct timeval tv;
         int nfds=0;
         int ret;
-	int new_request;
+        int new_request;
 
         MUTEX_LOCK(httpd->run_mutex);
         if (!httpd->running) {
@@ -432,11 +432,11 @@ httpd_thread(void *arg)
                 if (connection->type == CONNECTION_TYPE_PTTH) {
                     http_request_is_reverse(connection->request);
                 }
-		logger_log(httpd->logger, LOGGER_DEBUG, "new request, connection %d, socket %d type %s",
+                logger_log(httpd->logger, LOGGER_DEBUG, "new request, connection %d, socket %d type %s",
                            i, connection->socket_fd, typename [connection->type]);
             } else {
                 new_request = 0;
-	    }
+            }
 
             logger_log(httpd->logger, LOGGER_DEBUG, "httpd receiving on socket %d, connection %d",
                        connection->socket_fd, i);
@@ -444,20 +444,20 @@ httpd_thread(void *arg)
                 logger_log(httpd->logger, LOGGER_DEBUG,"\nhttpd: current connections:");
                 for (int i = 0; i < httpd->max_connections; i++) {
                     http_connection_t *connection = &httpd->connections[i];
-                    if(!connection->connected) {
+                    if (!connection->connected) {
                         continue;
                     }
                     if (!FD_ISSET(connection->socket_fd, &rfds)) {
                         logger_log(httpd->logger, LOGGER_DEBUG, "connection %d type %d socket %d  conn %p %s", i,
                                    connection->type, connection->socket_fd,
                                    connection->user_data, typename [connection->type]);
-		    } else {
-		      logger_log(httpd->logger, LOGGER_DEBUG, "connection %d type %d socket %d  conn %p %s ACTIVE CONNECTION",
-                                 i, connection->type, connection->socket_fd, connection->user_data, typename [connection->type]);
+                    } else {
+                        logger_log(httpd->logger, LOGGER_DEBUG, "connection %d type %d socket %d  conn %p %s ACTIVE CONNECTION",
+                                   i, connection->type, connection->socket_fd, connection->user_data, typename [connection->type]);
                     }
                 }
-		logger_log(httpd->logger, LOGGER_DEBUG, " ");
-	    }
+                logger_log(httpd->logger, LOGGER_DEBUG, " ");
+            }
             /* reverse-http responses from the client must not be sent to the llhttp parser:
              * such messages start with "HTTP/1.1" */
             if (new_request) {
@@ -470,14 +470,14 @@ httpd_thread(void *arg)
                                    connection->socket_fd);
                         break;
                     } else if (ret == -1) {
-		      if (errno == EAGAIN) {
-			continue;
-		      } else {
-                        int sock_err = SOCKET_GET_ERROR();
-                        logger_log(httpd->logger, LOGGER_ERR, "httpd: recv socket error %d:%s",
-                                   sock_err, SOCKET_ERROR_STRING(sock_err));
-                        break;
-		      }
+                        if (errno == EAGAIN) {
+                            continue;
+                        } else {
+                            int sock_err = SOCKET_GET_ERROR();
+                            logger_log(httpd->logger, LOGGER_ERR, "httpd: recv socket error %d:%s",
+                                       sock_err, SOCKET_ERROR_STRING(sock_err));
+                            break;
+                        }
                     } else {
                         readstart += ret;
                         ret = readstart;
