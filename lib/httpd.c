@@ -463,10 +463,10 @@ httpd_thread(void *arg)
             if (new_request) {
                 int readstart = 0;
                 new_request = 0;
-                while (readstart < 8) {
+                while (readstart < 8 && connection->socket_fd) {
                     ret = recv(connection->socket_fd, buffer + readstart, sizeof(buffer) - 1 - readstart, 0);
                     if (ret == 0) {
-                        logger_log(httpd->logger, LOGGER_DEBUG, "client closed connection on  socket %d",
+                        logger_log(httpd->logger, LOGGER_DEBUG, "client closed connection on socket %d",
                                    connection->socket_fd);
                         break;
                     } else if (ret == -1) {
@@ -474,8 +474,8 @@ httpd_thread(void *arg)
                             continue;
                         } else {
                             int sock_err = SOCKET_GET_ERROR();
-                            logger_log(httpd->logger, LOGGER_ERR, "httpd: recv socket error %d:%s",
-                                       sock_err, SOCKET_ERROR_STRING(sock_err));
+                            logger_log(httpd->logger, LOGGER_ERR, "httpd: recv error %d on socket %d: %s",
+                                       sock_err, connection->socket_fd, SOCKET_ERROR_STRING(sock_err));
                             break;
                         }
                     } else {
@@ -483,13 +483,22 @@ httpd_thread(void *arg)
                         ret = readstart;
                     }
                 }
+                if (!connection->socket_fd) {
+                    /* connection was recently removed */
+                    continue;
+                }
                 if (!memcmp(buffer, http, 8)) {
                     http_request_set_reverse(connection->request);  
                 }
             } else {
-                ret = recv(connection->socket_fd, buffer, sizeof(buffer) - 1, 0);
-                if (ret == 0) {
-                    httpd_remove_connection(httpd, connection);
+                if (connection->socket_fd) {
+                    ret = recv(connection->socket_fd, buffer, sizeof(buffer) - 1, 0);
+                    if (ret == 0) {
+                        httpd_remove_connection(httpd, connection);
+                        continue;
+                    }
+                } else {
+                    /* connection was recently removed */
                     continue;
                 }
             }
