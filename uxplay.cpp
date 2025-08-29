@@ -558,34 +558,43 @@ static guint g_unix_signal_add(gint signum, GSourceFunc handler, gpointer user_d
 }
 #endif
 
+#define MAX_VIDEO_RENDERERS 3
+#define MAX_AUDIO_RENDERERS 2
 static void main_loop()  {
-    guint gst_video_bus_watch_id[3] = { 0 };
-    g_assert(n_video_renderers <= 3);
-    guint gst_audio_bus_watch_id[2] = { 0 };
-    g_assert(n_audio_renderers <= 2);
+    guint gst_video_bus_watch_id[MAX_VIDEO_RENDERERS] = { 0 };
+    guint gst_audio_bus_watch_id[MAX_AUDIO_RENDERERS] = { 0 };
     GMainLoop *loop = g_main_loop_new(NULL,FALSE);
     relaunch_video = false;
     reset_loop = false;
     reset_httpd = false;
     preserve_connections = false;
+    n_video_renderers = 0;
+    n_audio_renderers = 0;
     if (use_video) {
+        n_video_renderers = 1;
         relaunch_video = true;
         if (url.empty()) {
-            /* renderer[0] : jpeg coverart; renderer[1] h264 video; renderer[2] h265 video (optional)  */
-            n_video_renderers = h265_support ? 3 : 2;
+            if (h265_support) {
+                n_video_renderers++;
+            }
+            if (render_coverart) {
+                n_video_renderers++;
+            }
+            /* renderer[0] : h264 video; followed by  h265 video (optional) and jpeg (optional)  */
             gst_x11_window_id = 0;           
         } else {
             /* hls video will be rendered: renderer[0] : hls  */
-	    n_video_renderers = 1;
             url.erase();
             gst_x11_window_id = g_timeout_add(100, (GSourceFunc) x11_window_callback, (gpointer) loop);
         }
+        g_assert(n_video_renderers <= MAX_VIDEO_RENDERERS);
         for (int i = 0; i < n_video_renderers; i++) {
             gst_video_bus_watch_id[i] = (guint) video_renderer_listen((void *)loop, i);
         }
     }
     if (use_audio) {
         n_audio_renderers = 2;
+        g_assert(n_audio_renderers <= MAX_AUDIO_RENDERERS);
         for (int i = 0; i < n_audio_renderers; i++) {
             gst_audio_bus_watch_id[i] = (guint) audio_renderer_listen((void *)loop, i);      
         }
@@ -2727,7 +2736,8 @@ int main (int argc, char *argv[]) {
     if (use_video) {
         video_renderer_init(render_logger, server_name.c_str(), videoflip, video_parser.c_str(),
                             video_decoder.c_str(), video_converter.c_str(), videosink.c_str(),
-                            videosink_options.c_str(), fullscreen, video_sync, h265_support, playbin_version, NULL);
+                            videosink_options.c_str(), fullscreen, video_sync, h265_support,
+                            render_coverart, playbin_version, NULL);
         video_renderer_start();
 #ifdef __OpenBSD__
     } else {
@@ -2811,7 +2821,8 @@ int main (int argc, char *argv[]) {
             const char *uri = (url.empty() ? NULL : url.c_str());
             video_renderer_init(render_logger, server_name.c_str(), videoflip, video_parser.c_str(),
                                 video_decoder.c_str(), video_converter.c_str(), videosink.c_str(),
-                                videosink_options.c_str(), fullscreen, video_sync, h265_support, playbin_version, uri);
+                                videosink_options.c_str(), fullscreen, video_sync, h265_support,
+                                render_coverart, playbin_version, uri);
             video_renderer_start();
         }
         if (reset_httpd) {

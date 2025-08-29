@@ -59,8 +59,6 @@ static int type_265;
 static int type_hls;
 static int type_jpeg;
 
-
-
 typedef enum {
   //GST_PLAY_FLAG_VIDEO         = (1 << 0),
   //GST_PLAY_FLAG_AUDIO         = (1 << 1),
@@ -226,7 +224,7 @@ GstElement *make_video_sink(const char *videosink, const char *videosink_options
 
 void  video_renderer_init(logger_t *render_logger, const char *server_name, videoflip_t videoflip[2], const char *parser,
                           const char *decoder, const char *converter, const char *videosink, const char *videosink_options, 
-                          bool initial_fullscreen, bool video_sync, bool h265_support, guint playbin_version, const char *uri) {
+                          bool initial_fullscreen, bool video_sync, bool h265_support, bool coverart_support, guint playbin_version, const char *uri) {
     GError *error = NULL;
     GstCaps *caps = NULL;
     hls_video = (uri != NULL);
@@ -247,7 +245,6 @@ void  video_renderer_init(logger_t *render_logger, const char *server_name, vide
     type_264 = -1;
     type_265 = -1;
     type_jpeg = -1;
-    
 
     /* this call to g_set_application_name makes server_name appear in the  X11 display window title bar, */
     /* (instead of the program name uxplay taken from (argv[0]). It is only set one time. */
@@ -255,18 +252,22 @@ void  video_renderer_init(logger_t *render_logger, const char *server_name, vide
     const gchar *appname = g_get_application_name();
     if (!appname || strcmp(appname,server_name))  g_set_application_name(server_name);
     appname = NULL;
-
+    n_renderers = 1;
     /* the renderer for hls video will only be built if a HLS uri is provided in 
      * the call to video_renderer_init, in which case the h264/h265 mirror-mode and jpeg
      * audio-mode renderers will not be built.   This is because it appears that we cannot  
      * put playbin into GST_STATE_READY before knowing the uri (?), so cannot use a
      * unified renderer structure with h264, h265, jpeg and hls  */  
     if (hls_video) {
-        n_renderers = 1;
-        /* renderer[0]: playbin (hls) */
+        type_hls = 0;
     } else {
-        n_renderers = h265_support ? 3 : 2;
-        /* renderer[0]: jpeg; [1]: h264; [2]: h265 */
+        type_264 = 0;
+        if (h265_support) {
+            type_265 = n_renderers++;
+        }
+        if (coverart_support) {
+            type_jpeg = n_renderers++;
+        }
     }
     g_assert (n_renderers <= NCODECS);
     for (int i = 0; i < n_renderers; i++) {
@@ -293,7 +294,6 @@ void  video_renderer_init(logger_t *render_logger, const char *server_name, vide
             logger_log(logger, LOGGER_INFO, "Will use GStreamer playbin version %u to play HLS streamed video", playbin_version);	    
             g_assert(renderer_type[i]->pipeline);
             renderer_type[i]->codec = hls;
-            type_hls = i;
             /* if we are not using an autovideosink, build a videosink based on the string "videosink" */
             if (!auto_videosink) { 
                 GstElement *playbin_videosink = make_video_sink(videosink, videosink_options);  
@@ -312,24 +312,17 @@ void  video_renderer_init(logger_t *render_logger, const char *server_name, vide
             g_object_set (G_OBJECT (renderer_type[i]->pipeline), "uri", uri, NULL);
         } else {
             bool jpeg_pipeline = false;
-            switch (i) {
-            case 0:
+            if (i == type_264) {
+                renderer_type[i]->codec = h264;
+                caps = gst_caps_from_string(h264_caps);
+            } else if (i == type_265) {
+                renderer_type[i]->codec = h265;
+                caps = gst_caps_from_string(h265_caps);
+            } else if (i == type_jpeg) {
                 jpeg_pipeline = true;
                 renderer_type[i]->codec = jpeg;
                 caps = gst_caps_from_string(jpeg_caps);
-                type_jpeg = i;
-                break;
-            case 1:
-                renderer_type[i]->codec = h264;
-                caps = gst_caps_from_string(h264_caps);
-                type_264 = i;
-                break;
-            case 2:
-                renderer_type[i]->codec = h265;
-                caps = gst_caps_from_string(h265_caps);
-                type_265 = i;
-                break;
-            default:
+            } else {
                 g_assert(0);
             }
             GString *launch = g_string_new("appsrc name=video_source ! ");
@@ -516,6 +509,9 @@ bool waiting_for_x11_window() {
 
 void video_renderer_display_jpeg(const void *data, int *data_len) {
     GstBuffer *buffer;
+    if (type_jpeg == -1) {
+        return;
+    }
     if (renderer && !strcmp(renderer->codec, jpeg)) {
         buffer = gst_buffer_new_allocate(NULL, *data_len, NULL);
 	g_assert(buffer != NULL);
