@@ -1011,11 +1011,12 @@ like `\{0.0.0.00000000\}.\{98e35b2b-8eba-412e-b840-fd2c2492cf44\}`. If
 
 If you wish to specify the videosink using the `-vs <videosink>` option,
 some choices for `<videosink>` are `d3d12videosink`, `d3d11videosink`,
-`d3dvideosink`, `glimagesink`, `gtksink`, `autovideosink`. If you do not
-specify the videosink, the d3d11videosink will be used (users have
-reported segfaults of the newer d3d12 videodecoder on certain older
-Nvidia cards when the image resolution changes: d3d11 will used by
-default until this is fixed).
+`d3dvideosink`, `glimagesink`, `gtksink`, `autovideosink`. *There have
+been reports of segfaults of the newer d3d12 videodecoder on certain
+older Nvidia cards when the image resolution changes, e.g., when the iOS
+client is rotated between portrait and landcape modes: this was a
+GStreamer issue that is apparently now fixed (a workaround is to use
+d3d11).*
 
 -   With Direct3D 11.0 or greater, various options can be set using
     e.g. `-vs "d3d11videosink <options>"` (see the gstreamer videosink

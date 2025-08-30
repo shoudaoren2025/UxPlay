@@ -999,10 +999,11 @@ used.</p>
 <code>&lt;videosink&gt;</code> are <code>d3d12videosink</code>,
 <code>d3d11videosink</code>, <code>d3dvideosink</code>,
 <code>glimagesink</code>, <code>gtksink</code>,
-<code>autovideosink</code>. If you do not specify the videosink, the
-d3d11videosink will be used (users have reported segfaults of the newer
-d3d12 videodecoder on certain older Nvidia cards when the image
-resolution changes: d3d11 will used by default until this is fixed).</p>
+<code>autovideosink</code>. <em>There have been reports of segfaults of
+the newer d3d12 videodecoder on certain older Nvidia cards when the
+image resolution changes, e.g., when the iOS client is rotated between
+portrait and landcape modes: this was a GStreamer issue that is
+apparently now fixed (a workaround is to use d3d11).</em></p>
 <ul>
 <li>With Direct3D 11.0 or greater, various options can be set using
 e.g. <code>-vs "d3d11videosink &lt;options&gt;"</code> (see the

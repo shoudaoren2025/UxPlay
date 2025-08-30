@@ -806,7 +806,7 @@ static void print_info (char *name) {
     printf("-s wxh[@r]Request to client for video display resolution [refresh_rate]\n"); 
     printf("          default 1920x1080[@60] (or 3840x2160[@60] with -h265 option)\n");
     printf("-o        Set display \"overscanned\" mode on (not usually needed)\n");
-    printf("-fs       Full-screen (only with X11, Wayland, VAAPI, D3D11, kms)\n");
+    printf("-fs       Full-screen (only with X11, Wayland, VAAPI, D3D11/12, kms)\n");
     printf("-p        Use legacy ports UDP 6000:6001:7011 TCP 7000:7001:7100\n");
     printf("-p n      Use TCP and UDP ports n,n+1,n+2. range %d-%d\n", LOWEST_ALLOWED_PORT, HIGHEST_PORT);
     printf("          use \"-p n1,n2,n3\" to set each port, \"n1,n2\" for n3 = n2+1\n");
@@ -821,7 +821,8 @@ static void print_info (char *name) {
     printf("          another choice when using v4l2h264dec: v4l2convert\n");
     printf("-vs ...   Choose the GStreamer videosink; default \"autovideosink\"\n");
     printf("          some choices: ximagesink,xvimagesink,vaapisink,glimagesink,\n");
-    printf("          gtksink,waylandsink,osxvideosink,kmssink,d3d11videosink etc.\n");
+    printf("          gtksink,waylandsink,kmssink,fbdevsink,osxvideosink,\n");
+    printf("          d3d11videosink,d3v12videosink, etc.\n");
     printf("-vs 0     Streamed audio only, with no video display window\n");
     printf("-v4l2     Use Video4Linux2 for GPU hardware h264 decoding\n");
     printf("-bt709    Sometimes needed for Raspberry Pi models using Video4Linux2 \n");
@@ -2608,20 +2609,6 @@ int main (int argc, char *argv[]) {
     }
 #endif
 
-#ifdef _WIN32
-    /* because of issues in videosink dvd312videosink (segfault when resolution changes
-     with certain Nvdia graphics cards) make the default videosink d3d11videosink, and
-     use its decoder */
-    if (videosink == "autovideosink") {
-        videosink.erase();
-        videosink.append("d3d11videosink");
-    }
-    if (videosink == "d3d11videosink") {
-        video_decoder.erase();
-        video_decoder.append("d3d11h264dec");
-    }
-#endif
-
     if (videosink == "0") {
         use_video = false;
 	videosink.erase();
@@ -2635,7 +2622,7 @@ int main (int argc, char *argv[]) {
         if (videosink == "waylandsink" || videosink == "vaapisink") {
             videosink_options.append(" fullscreen=true");
         } else if (videosink == "kmssink") {
-           videosink_options.append(" force_modesetting=true");	  
+            videosink_options.append(" force_modesetting=true");	  
         }
     }
 
