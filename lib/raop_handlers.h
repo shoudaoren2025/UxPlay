@@ -1174,11 +1174,6 @@ raop_handler_teardown(raop_conn_t *conn,
     data = http_request_get_data(request, &data_len);
     plist_t req_root_node = NULL;
     plist_from_bin(data, data_len, &req_root_node);
-    char * plist_xml;
-    uint32_t plist_len;
-    plist_to_xml(req_root_node, &plist_xml, &plist_len);
-    logger_log(conn->raop->logger, LOGGER_DEBUG, "%s", plist_xml);
-    free(plist_xml);
     plist_t req_streams_node = plist_dict_get_item(req_root_node, "streams");
     /* Process stream teardown requests */
     if (PLIST_IS_ARRAY(req_streams_node)) {
@@ -1196,9 +1191,6 @@ raop_handler_teardown(raop_conn_t *conn,
         }
     }
     plist_free(req_root_node);
-    if (conn->raop->callbacks.conn_teardown) {
-        conn->raop->callbacks.conn_teardown(conn->raop->callbacks.cls, &teardown_96, &teardown_110);
-    }
     logger_log(conn->raop->logger, LOGGER_DEBUG, "TEARDOWN request,  96=%d, 110=%d", teardown_96, teardown_110);
   
     http_response_add_header(response, "Connection", "close");
@@ -1228,7 +1220,10 @@ raop_handler_teardown(raop_conn_t *conn,
             raop_rtp_mirror_destroy(conn->raop_rtp_mirror);
             conn->raop_rtp_mirror = NULL;
         }
-	/* shut down any HLS connections */
-	httpd_remove_connections_by_type(conn->raop->httpd, CONNECTION_TYPE_HLS);
-    }	
+        /* shut down any HLS connections */
+        httpd_remove_connections_by_type(conn->raop->httpd, CONNECTION_TYPE_HLS);
+    }
+    if (conn->raop->callbacks.conn_teardown) {
+        conn->raop->callbacks.conn_teardown(conn->raop->callbacks.cls, &teardown_96, &teardown_110);
+    }
 }
