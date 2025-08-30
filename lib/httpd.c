@@ -201,25 +201,26 @@ httpd_destroy(httpd_t *httpd)
 static void
 httpd_remove_connection(httpd_t *httpd, http_connection_t *connection)
 {
+    int socket_fd = connection->socket_fd;
+    connection->socket_fd = 0;
     if (connection->request) {
         http_request_destroy(connection->request);
         connection->request = NULL;
     }
     logger_log(httpd->logger, LOGGER_DEBUG, "removing connection type %s socket %d conn %p", typename[connection->type],
-               connection->socket_fd, connection->user_data);
+               socket_fd, connection->user_data);
     if (connection->user_data) {
         httpd->callbacks.conn_destroy(connection->user_data);
         connection->user_data = NULL;
     }
-    if (connection->socket_fd) {
-        shutdown(connection->socket_fd, SHUT_WR);
-        int ret = closesocket(connection->socket_fd);
+    if (socket_fd) {
+        shutdown(socket_fd, SHUT_WR);
+        int ret = closesocket(socket_fd);
         if (ret == -1) {
             logger_log(httpd->logger, LOGGER_ERR, "httpd error in closesocket (close): %d %s", errno, strerror(errno));
         } else {
-            logger_log(httpd->logger, LOGGER_INFO, "Connection closed on socket %d", connection->socket_fd);
+            logger_log(httpd->logger, LOGGER_INFO, "Connection closed on socket %d", socket_fd);
         }
-        connection->socket_fd = 0;
     }
     if (connection->connected) {
         connection->connected = 0;
@@ -444,7 +445,7 @@ httpd_thread(void *arg)
                 logger_log(httpd->logger, LOGGER_DEBUG,"\nhttpd: current connections:");
                 for (int i = 0; i < httpd->max_connections; i++) {
                     http_connection_t *connection = &httpd->connections[i];
-                    if (!connection->connected) {
+                    if (!connection->connected || !connection->socket_fd) {
                         continue;
                     }
                     if (!FD_ISSET(connection->socket_fd, &rfds)) {
@@ -463,7 +464,10 @@ httpd_thread(void *arg)
             if (new_request) {
                 int readstart = 0;
                 new_request = 0;
-                while (readstart < 8 && connection->socket_fd) {
+                while (readstart < 8) {
+                    if (!connection->socket_fd) {
+                        break;
+                    }
                     ret = recv(connection->socket_fd, buffer + readstart, sizeof(buffer) - 1 - readstart, 0);
                     if (ret == 0) {
                         logger_log(httpd->logger, LOGGER_DEBUG, "client closed connection on socket %d",
