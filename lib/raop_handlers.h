@@ -1116,6 +1116,27 @@ raop_handler_set_parameter(raop_conn_t *conn,
     }
 }
 
+static void
+raop_handler_audiomode(raop_conn_t *conn,
+                      http_request_t *request, http_response_t *response,
+                      char **response_data, int *response_datalen)
+{
+    const char *data = NULL;
+    char *audiomode = NULL;
+    int data_len;
+    data = http_request_get_data(request, &data_len);
+    plist_t req_root_node = NULL;
+    plist_from_bin(data, data_len, &req_root_node);
+    plist_t req_audiomode_node = plist_dict_get_item(req_root_node, "audioMode");
+    plist_get_string_val(req_audiomode_node, &audiomode);
+    /* not sure what should be done with this request: usually audioMode requested is "default" */
+    int log_level = (strstr(audiomode, "default") ? LOGGER_DEBUG : LOGGER_INFO);
+    logger_log(conn->raop->logger, log_level, "Unhandled RTSP request \"audioMode: %s\"", audiomode);
+    if (audiomode) {
+        free(audiomode);
+    }
+    plist_free(req_root_node);
+}
 
 static void
 raop_handler_feedback(raop_conn_t *conn,

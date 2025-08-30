@@ -363,10 +363,8 @@ conn_request(void *ptr, http_request_t *request, http_response_t **response) {
                 handler = &raop_handler_pairverify;
             } else if (!strcmp(url, "/fp-setup")) {
                 handler = &raop_handler_fpsetup;
-            } else if (!strcmp(url, "/getProperty")) {
-                handler = &http_handler_get_property;
             } else if (!strcmp(url, "/audioMode")) {
-                //handler = &http_handler_audioMode;
+                handler = &raop_handler_audiomode;
             }
         } else if (!strcmp(method, "GET")) {
             if (!strcmp(url, "/info")) {
