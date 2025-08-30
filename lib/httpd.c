@@ -391,7 +391,9 @@ httpd_thread(void *arg)
             /* Timeout happened */
             continue;
         } else if (ret == -1) {
-            logger_log(httpd->logger, LOGGER_ERR, "httpd error in select: %d %s", errno, strerror(errno));
+            int sock_err = SOCKET_GET_ERROR();
+            logger_log(httpd->logger, LOGGER_ERR,
+		       "httpd error in select: %d %s", sock_err, SOCKET_ERROR_STRING(sock_err));
             break;
         }
 
