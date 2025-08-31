@@ -174,12 +174,17 @@ static int n_audio_renderers = 0;
 static bool hls_support = false;
 static std::string url = "";
 static guint gst_x11_window_id = 0;
+static guint progress_id = 0;
 static guint gst_hls_position_id = 0;
 static bool preserve_connections = false;
 static guint missed_feedback_limit = MISSED_FEEDBACK_LIMIT;
 static guint missed_feedback = 0;
 static guint playbin_version = DEFAULT_PLAYBIN_VERSION;
 static bool reset_httpd = false;
+static bool monitor_progress = false;
+static uint32_t rtptime;
+static uint32_t rtptime_start;
+static uint32_t rtptime_end;
 
 //Support for D-Bus-based screensaver inhibition (org.freedesktop.ScreenSaver) 
 static unsigned int scrsv;
@@ -558,6 +563,30 @@ static guint g_unix_signal_add(gint signum, GSourceFunc handler, gpointer user_d
 }
 #endif
 
+static void display_progress(uint32_t start, uint32_t curr, uint32_t end) {
+    if (curr < start || curr > end) {
+        return;
+    }
+    int duration = (int)  (end  - start)/44100;
+    int position = (int)  (curr - start)/44100;
+    int remain = duration - position;
+    printf("audio progress (min:sec): %3d:%2.2d; remaining: %3d:%2.2d; track length %d:%2.2d\r",
+           position/60, position%60, remain/60, remain%60, duration/60, duration%60);
+    fflush(NULL);
+}
+
+static gboolean progress_callback (gpointer loop) {
+    if (monitor_progress) {
+        if (rtptime_start || rtptime_end) {
+            display_progress(rtptime_start, rtptime, rtptime_end);
+        }
+        return TRUE;
+    } else {
+        progress_id = 0;
+        return FALSE;
+    }
+}
+
 #define MAX_VIDEO_RENDERERS 3
 #define MAX_AUDIO_RENDERERS 2
 static void main_loop()  {
@@ -565,6 +594,7 @@ static void main_loop()  {
     guint gst_audio_bus_watch_id[MAX_AUDIO_RENDERERS] = { 0 };
     GMainLoop *loop = g_main_loop_new(NULL,FALSE);
     relaunch_video = false;
+    monitor_progress = false;
     reset_loop = false;
     reset_httpd = false;
     preserve_connections = false;
@@ -593,6 +623,10 @@ static void main_loop()  {
         }
     }
     if (use_audio) {
+        rtptime_start = 0;
+        rtptime_end = 0;
+        monitor_progress = true;
+        progress_id  = g_timeout_add_seconds(1,(GSourceFunc) progress_callback, (gpointer) loop);
         n_audio_renderers = 2;
         g_assert(n_audio_renderers <= MAX_AUDIO_RENDERERS);
         for (int i = 0; i < n_audio_renderers; i++) {
@@ -618,6 +652,7 @@ static void main_loop()  {
     if (sigint_watch_id > 0) g_source_remove(sigint_watch_id);
     if (sigterm_watch_id > 0) g_source_remove(sigterm_watch_id);
     if (reset_watch_id > 0) g_source_remove(reset_watch_id);
+    if (progress_id > 0) g_source_remove(progress_id);
     if (video_reset_watch_id > 0) g_source_remove(video_reset_watch_id);
     if (feedback_watch_id > 0) g_source_remove(feedback_watch_id);
     g_main_loop_unref(loop);
@@ -1944,12 +1979,15 @@ extern "C" void audio_process (void *cls, raop_ntp_t *ntp, audio_decode_struct *
         data->ntp_time_remote = data->ntp_time_remote + remote_clock_offset;
         switch (data->ct) {
         case 2:
+            /* for progress monitor (ALAC audio only) */
+            rtptime = data->rtp_time;
             if (audio_delay_alac) {
                 data->ntp_time_remote = (uint64_t) ((int64_t) data->ntp_time_remote + audio_delay_alac);
             }
             break;
         case 4:
         case 8:
+            monitor_progress =  false;
             if (audio_delay_aac) {
                 data->ntp_time_remote = (uint64_t) ((int64_t) data->ntp_time_remote + audio_delay_aac);
             }
@@ -2133,12 +2171,11 @@ extern "C" void audio_stop_coverart_rendering(void *cls) {
     }
 }
 
-extern "C" void audio_set_progress(void *cls, unsigned int start, unsigned int curr, unsigned int end) {
-    int duration = (int)  (end  - start)/44100;
-    int position = (int)  (curr - start)/44100;
-    int remain = duration - position;
-    printf("audio progress (min:sec): %d:%2.2d; remaining: %d:%2.2d; track length %d:%2.2d\n",
-	   position/60, position%60, remain/60, remain%60, duration/60, duration%60);
+extern "C" void audio_set_progress(void *cls, uint32_t *start, uint32_t *curr, uint32_t *end) {
+    rtptime_start = *start;
+    rtptime = *curr;
+    rtptime_end = *end;
+    display_progress(rtptime_start, rtptime, rtptime_end);
 }
 
 extern "C" void audio_set_metadata(void *cls, const void *buffer, int buflen) {
@@ -2147,7 +2184,7 @@ extern "C" void audio_set_metadata(void *cls, const void *buffer, int buflen) {
     int datalen;
     int count = 0;
 
-    printf("==============Audio Metadata=============\n");
+    printf("====================Audio Metadata==================\n");
 
     if (buflen < 8) {
         LOGE("received invalid metadata, length %d < 8", buflen);

@@ -93,9 +93,9 @@ struct raop_rtp_s {
     int coverart_len;
     char *dacp_id;
     char *active_remote_header;
-    unsigned int progress_start;
-    unsigned int progress_curr;
-    unsigned int progress_end;
+    uint32_t progress_start;
+    uint32_t progress_curr;
+    uint32_t  progress_end;
     int progress_changed;
 
     int flush;
@@ -287,9 +287,9 @@ raop_rtp_process_events(raop_rtp_t *raop_rtp, void *cb_data)
     int coverart_len;
     char *dacp_id;
     char *active_remote_header;
-    unsigned int progress_start;
-    unsigned int progress_curr;
-    unsigned int progress_end;
+    uint32_t progress_start;
+    uint32_t progress_curr;
+    uint32_t progress_end;
     int progress_changed;
 
     assert(raop_rtp);
@@ -378,7 +378,7 @@ raop_rtp_process_events(raop_rtp_t *raop_rtp, void *cb_data)
 
     if (progress_changed) {
         if (raop_rtp->callbacks.audio_set_progress) {
-            raop_rtp->callbacks.audio_set_progress(raop_rtp->callbacks.cls, progress_start, progress_curr, progress_end);
+            raop_rtp->callbacks.audio_set_progress(raop_rtp->callbacks.cls, &progress_start, &progress_curr, &progress_end);
         }
     }
     return 0;
@@ -805,7 +805,7 @@ raop_rtp_remote_control_id(raop_rtp_t *raop_rtp, const char *dacp_id, const char
 }
 
 void
-raop_rtp_set_progress(raop_rtp_t *raop_rtp, unsigned int start, unsigned int curr, unsigned int end)
+raop_rtp_set_progress(raop_rtp_t *raop_rtp, uint32_t start, uint32_t curr, uint32_t end)
 {
     assert(raop_rtp);
 

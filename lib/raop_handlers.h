@@ -22,6 +22,7 @@
 #include "utils.h"
 #include <ctype.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include <plist/plist.h>
 #define AUDIO_SAMPLE_RATE 44100   /* all supported AirPlay audio format use this sample rate */
 #define SECOND_IN_USECS 1000000
@@ -1091,8 +1092,8 @@ raop_handler_set_parameter(raop_conn_t *conn,
                 sscanf(datastr+8, "%f", &vol);
                 raop_rtp_set_volume(conn->raop_rtp, vol);
             } else if ((datalen >= 10) && !strncmp(datastr, "progress: ", 10)) {
-                unsigned int start, curr, end;
-                sscanf(datastr+10, "%u/%u/%u", &start, &curr, &end);
+                uint32_t start, curr, end;
+                sscanf(datastr+10, "%"PRIu32"/%"PRIu32"/%"PRIu32, &start, &curr, &end);
                 raop_rtp_set_progress(conn->raop_rtp, start, curr, end);
             }
         } else if (!conn->raop_rtp) {
