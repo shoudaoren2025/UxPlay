@@ -181,7 +181,7 @@ void video_renderer_size(float *f_width_source, float *f_height_source, float *f
 }
 
 GstElement *make_video_sink(const char *videosink, const char *videosink_options) {
-  /* used to build a videosink for playbin, using the user-specified string "videosink" */ 
+    /* used to build a videosink for playbin, using the user-specified string "videosink" */ 
     GstElement *video_sink = gst_element_factory_make(videosink, "videosink");
     if (!video_sink) {
         return NULL;
@@ -222,7 +222,7 @@ GstElement *make_video_sink(const char *videosink, const char *videosink_options
     return video_sink;
 }
 
-void  video_renderer_init(logger_t *render_logger, const char *server_name, videoflip_t videoflip[2], const char *parser,
+void video_renderer_init(logger_t *render_logger, const char *server_name, videoflip_t videoflip[2], const char *parser,
                           const char *decoder, const char *converter, const char *videosink, const char *videosink_options, 
                           bool initial_fullscreen, bool video_sync, bool h265_support, bool coverart_support, guint playbin_version, const char *uri) {
     GError *error = NULL;
@@ -400,9 +400,9 @@ void  video_renderer_init(logger_t *render_logger, const char *server_name, vide
         renderer_type[i]->gst_window = NULL;
         renderer_type[i]->use_x11 = false;
         X11_search_attempts = 0;
-	/* setting char *x11_display_name to NULL means the value is taken from $DISPLAY in the environment 
+        /* setting char *x11_display_name to NULL means the value is taken from $DISPLAY in the environment 
          * (a uxplay option to specify a different value is possible)  */
-	char *x11_display_name = NULL;
+        char *x11_display_name = NULL;
         if (use_x11) {
             if (i == 0) {
                 renderer_type[0]->gst_window = (X11_Window_t *) calloc(1, sizeof(X11_Window_t));
@@ -469,16 +469,16 @@ void video_renderer_start() {
     if (hls_video) {
         gst_element_set_state (renderer->pipeline, GST_STATE_PAUSED);
 	gst_element_get_state(renderer->pipeline, &state, NULL, 1000 * GST_MSECOND);
-	state_name= gst_element_state_get_name(state);
+	state_name = gst_element_state_get_name(state);
 	logger_log(logger, LOGGER_DEBUG, "video renderer_start: state %s", state_name);
         return;
     } 
-  /* when not hls, start both h264 and h265 pipelines; will shut down the "wrong" one when we know the codec */
+    /* when not hls, start both h264 and h265 pipelines; will shut down the "wrong" one when we know the codec */
     for (int i = 0; i < n_renderers; i++) {
         gst_element_set_state (renderer_type[i]->pipeline, GST_STATE_PAUSED);
-	gst_element_get_state(renderer_type[i]->pipeline, &state, NULL, 1000 * GST_MSECOND);
-	state_name= gst_element_state_get_name(state);
-	logger_log(logger, LOGGER_DEBUG, "video renderer_start: renderer %d %p state %s", i, renderer_type[i], state_name);
+        gst_element_get_state(renderer_type[i]->pipeline, &state, NULL, 1000 * GST_MSECOND);
+        state_name = gst_element_state_get_name(state);
+        logger_log(logger, LOGGER_DEBUG, "video renderer_start: renderer %d %p state %s", i, renderer_type[i], state_name);
     }
     renderer = NULL;
     first_packet = true;
@@ -505,6 +505,43 @@ bool waiting_for_x11_window() {
     }
 #endif
     return false;
+}
+
+
+/* use this to cycle the jpeg renderer to remove expired coverart when no new coverart has replaced it */
+int video_renderer_cycle() {
+    g_assert(renderer);
+    GstState state, pending_state, target_state;
+    GstStateChangeReturn ret;
+    gst_element_get_state(renderer->pipeline, &state, NULL, 0);
+    logger_log(logger, LOGGER_DEBUG, "renderer_cycle renderer %p: initial pipeline state is %s", renderer,
+               gst_element_state_get_name(state));
+
+    for (int i = 0 ; i < 2; i++) {
+        if (i == 0 ) {
+            target_state = GST_STATE_NULL;
+            video_renderer_stop();
+        } else {
+            target_state = GST_STATE_PLAYING;
+            gst_element_set_state (renderer->pipeline, target_state);
+        }
+        while (state != target_state) {
+            ret = gst_element_get_state(renderer->pipeline, &state, &pending_state, 100 * GST_MSECOND);
+            if (ret == GST_STATE_CHANGE_SUCCESS) {
+                logger_log(logger, LOGGER_DEBUG, "current pipeline state is %s", gst_element_state_get_name(state));
+                if (pending_state != GST_STATE_VOID_PENDING) {
+                    logger_log(logger, LOGGER_DEBUG, "pending pipeline state is %s", gst_element_state_get_name(pending_state));
+                }
+            } else if (ret == GST_STATE_CHANGE_FAILURE) {
+                logger_log(logger, LOGGER_ERR, "pipeline %s: state change to %s failed", renderer->codec, gst_element_state_get_name(target_state));
+                return -1;
+            } else if (ret == GST_STATE_CHANGE_ASYNC) {
+                logger_log(logger, LOGGER_DEBUG, "state change to %s is asynchronous, waiting for completion ...",
+                           gst_element_state_get_name(target_state));
+            }
+        }
+    }
+    return 0;
 }
 
 void video_renderer_display_jpeg(const void *data, int *data_len) {
@@ -633,32 +670,32 @@ void video_renderer_destroy() {
 }
 
 static void get_stream_status_name(GstStreamStatusType type, char *name, size_t len) {
-  switch (type) {
-  case GST_STREAM_STATUS_TYPE_CREATE:
-    strncpy(name, "CREATE", len);
-    return;
-  case GST_STREAM_STATUS_TYPE_ENTER:
-    strncpy(name, "ENTER", len);
-    return;
-  case GST_STREAM_STATUS_TYPE_LEAVE:
-    strncpy(name, "LEAVE", len);
-    return;
-  case GST_STREAM_STATUS_TYPE_DESTROY:
-    strncpy(name, "DESTROY", len);
-    return;
-  case GST_STREAM_STATUS_TYPE_START:
-    strncpy(name, "START", len);
-    return;
-  case GST_STREAM_STATUS_TYPE_PAUSE:
-    strncpy(name, "PAUSE", len);
-    return;
-  case GST_STREAM_STATUS_TYPE_STOP:
-    strncpy(name, "STOP", len);
-    return;
-  default:
-    strncpy(name, "", len);
-    return;
-  }
+    switch (type) {
+    case GST_STREAM_STATUS_TYPE_CREATE:
+        strncpy(name, "CREATE", len);
+        return;
+    case GST_STREAM_STATUS_TYPE_ENTER:
+        strncpy(name, "ENTER", len);
+        return;
+    case GST_STREAM_STATUS_TYPE_LEAVE:
+        strncpy(name, "LEAVE", len);
+        return;
+    case GST_STREAM_STATUS_TYPE_DESTROY:
+        strncpy(name, "DESTROY", len);
+        return;
+    case GST_STREAM_STATUS_TYPE_START:
+        strncpy(name, "START", len);
+        return;
+    case GST_STREAM_STATUS_TYPE_PAUSE:
+        strncpy(name, "PAUSE", len);
+        return;
+    case GST_STREAM_STATUS_TYPE_STOP:
+        strncpy(name, "STOP", len);
+        return;
+    default:
+        strncpy(name, "", len);
+        return;
+    }
 }
   
 static gboolean gstreamer_video_pipeline_bus_callback(GstBus *bus, GstMessage *message, void *loop) {
@@ -692,7 +729,7 @@ static gboolean gstreamer_video_pipeline_bus_callback(GstBus *bus, GstMessage *m
 
     if (logger_debug) {
         gchar *name = NULL;
-	GstElement *element = NULL;
+        GstElement *element = NULL;
         gchar type_name[8] = { 0 };
         if (GST_MESSAGE_TYPE(message) == GST_MESSAGE_STREAM_STATUS) {
             GstStreamStatusType type;
@@ -793,9 +830,9 @@ static gboolean gstreamer_video_pipeline_bus_callback(GstBus *bus, GstMessage *m
         break;
     }
     case GST_MESSAGE_EOS:
-      /* end-of-stream */
+        /* end-of-stream */
         logger_log(logger, LOGGER_INFO, "GStreamer: End-Of-Stream (video)");
-	if (hls_video) {
+        if (hls_video) {
             gst_bus_set_flushing(bus, TRUE);
             gst_element_set_state (renderer_type[type]->pipeline, GST_STATE_READY);
             renderer_type[type]->terminate = TRUE;

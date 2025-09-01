@@ -57,6 +57,7 @@ void video_renderer_pause ();
 void video_renderer_seek(float position);
 void video_renderer_set_start(float position);
 void video_renderer_resume ();
+int video_renderer_cycle ();
 bool video_renderer_is_paused();
 uint64_t  video_renderer_render_buffer (unsigned char* data, int *data_len, int *nal_count, uint64_t *ntp_time);
 void video_renderer_display_jpeg(const void *data, int *data_len);
