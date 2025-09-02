@@ -507,7 +507,7 @@ static gboolean feedback_callback(gpointer loop) {
             g_main_loop_quit((GMainLoop *) loop);
             return TRUE;
         } else if (missed_feedback > 2) {
-            LOGE("%u missed client feedback signals (expected once per second); client may be offline", missed_feedback);
+            LOGE("%u missed client feedback signals (expected every two seconds); client may be offline", missed_feedback);
         }
         missed_feedback++;
     } else {
