@@ -788,6 +788,7 @@ raop_rtp_mirror_thread(void *arg)
                 logger_log(raop_rtp_mirror->logger, LOGGER_DEBUG, "\nReceived old-protocol once-per-second packet from client:"
                            " payload_size %d header %s ts_raw = %llu", payload_size, packet_description, ntp_timestamp_raw);
                 /* "old protocol" (used by AirMyPC), rest of 128-byte  packet is empty  */
+                break;
             case 0x05:
                 logger_log(raop_rtp_mirror->logger, LOGGER_DEBUG, "\nReceived video streaming performance info packet from client:"
                            " payload_size %d header %s ts_raw = %llu", payload_size, packet_description, ntp_timestamp_raw);
