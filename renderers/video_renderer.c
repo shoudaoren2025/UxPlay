@@ -507,10 +507,11 @@ bool waiting_for_x11_window() {
     return false;
 }
 
-
 /* use this to cycle the jpeg renderer to remove expired coverart when no new coverart has replaced it */
 int video_renderer_cycle() {
-    g_assert(renderer);
+    if (!renderer || !strstr(renderer->codec, jpeg)) {
+        return -1;
+    }
     GstState state, pending_state, target_state;
     GstStateChangeReturn ret;
     gst_element_get_state(renderer->pipeline, &state, NULL, 0);
@@ -518,6 +519,7 @@ int video_renderer_cycle() {
                gst_element_state_get_name(state));
 
     for (int i = 0 ; i < 2; i++) {
+        int count = 0;
         if (i == 0 ) {
             target_state = GST_STATE_NULL;
             video_renderer_stop();
@@ -526,7 +528,7 @@ int video_renderer_cycle() {
             gst_element_set_state (renderer->pipeline, target_state);
         }
         while (state != target_state) {
-            ret = gst_element_get_state(renderer->pipeline, &state, &pending_state, 100 * GST_MSECOND);
+            ret = gst_element_get_state(renderer->pipeline, &state, &pending_state, 1000 * GST_MSECOND);
             if (ret == GST_STATE_CHANGE_SUCCESS) {
                 logger_log(logger, LOGGER_DEBUG, "current pipeline state is %s", gst_element_state_get_name(state));
                 if (pending_state != GST_STATE_VOID_PENDING) {
@@ -534,7 +536,10 @@ int video_renderer_cycle() {
                 }
             } else if (ret == GST_STATE_CHANGE_FAILURE) {
                 logger_log(logger, LOGGER_ERR, "pipeline %s: state change to %s failed", renderer->codec, gst_element_state_get_name(target_state));
-                return -1;
+                count++;
+                if (count > 10) {
+                    return -1;
+                }
             } else if (ret == GST_STATE_CHANGE_ASYNC) {
                 logger_log(logger, LOGGER_DEBUG, "state change to %s is asynchronous, waiting for completion ...",
                            gst_element_state_get_name(target_state));

@@ -182,9 +182,12 @@ static guint missed_feedback = 0;
 static guint playbin_version = DEFAULT_PLAYBIN_VERSION;
 static bool reset_httpd = false;
 static bool monitor_progress = false;
-static uint32_t rtptime;
-static uint32_t rtptime_start;
-static uint32_t rtptime_end;
+static uint32_t rtptime = 0;
+static uint32_t rtptime_start = 0;
+static uint32_t rtptime_end = 0;
+static uint32_t rtptime_coverart_expired = 0;
+static std::string artist;
+static std::string coverart_artist;
 
 //Support for D-Bus-based screensaver inhibition (org.freedesktop.ScreenSaver) 
 static unsigned int scrsv;
@@ -580,6 +583,11 @@ static gboolean progress_callback (gpointer loop) {
         if (rtptime_start || rtptime_end) {
             display_progress(rtptime_start, rtptime, rtptime_end);
         }
+        if (render_coverart && coverart_artist == "_expired_" && rtptime - rtptime_coverart_expired > 44100 * 5) {
+            /* remove any expired coverart still being rendered more than 5 secs after it expired */ 
+            coverart_artist.erase();
+            video_renderer_cycle();
+        }
         return TRUE;
     } else {
         progress_id = 0;
@@ -626,6 +634,8 @@ static void main_loop()  {
         rtptime_start = 0;
         rtptime_end = 0;
         monitor_progress = true;
+        artist.erase();
+        coverart_artist.erase();
         progress_id  = g_timeout_add_seconds(1,(GSourceFunc) progress_callback, (gpointer) loop);
         n_audio_renderers = 2;
         g_assert(n_audio_renderers <= MAX_AUDIO_RENDERERS);
@@ -1541,6 +1551,17 @@ static void process_metadata(int count, const char *dmap_tag, const unsigned cha
                 break;
             case 'r':
                 metadata_text->append("Artist: ");  /*asar*/
+                if (render_coverart) {
+                    artist.erase();
+                    artist.append(metadata, metadata + datalen);
+                    if (coverart_artist == "_pending_") { 
+                        coverart_artist = artist;
+                    }
+                    if (coverart_artist != "_expired_" && coverart_artist != artist) {
+                        coverart_artist = "_expired_";
+                        rtptime_coverart_expired = rtptime;
+                    }
+                }  
                 break;
             default:
                 dmap_type = 0;
@@ -2161,7 +2182,8 @@ extern "C" void audio_set_coverart(void *cls, const void *buffer, int buflen) {
         LOGI("coverart size %d written to %s", buflen,  coverart_filename.c_str());
     } else if (buffer && render_coverart) {
         video_renderer_choose_codec(true, false);  /* video_is_jpeg = true */
-	video_renderer_display_jpeg(buffer, &buflen);
+        video_renderer_display_jpeg(buffer, &buflen);
+        coverart_artist = "_pending_";
     }
 }
 
