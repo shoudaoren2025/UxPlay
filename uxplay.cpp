@@ -2681,13 +2681,13 @@ int main (int argc, char *argv[]) {
         if (videosink == "waylandsink" || videosink == "vaapisink") {
             videosink_options.append(" fullscreen=true");
         } else if (videosink == "kmssink") {
-            videosink_options.append(" force_modesetting=true");	  
+            videosink_options.append(" force-modesetting=TRUE ");	  
         }
     }
 
     if (videosink == "d3d11videosink"  && videosink_options.empty() && use_video) {
         if (fullscreen) {
-            videosink_options.append(" fullscreen-toggle-mode=GST_D3D11_WINDOW_FULLSCREEN_TOGGLE_MODE_PROPERTY fullscreen=TRUE");
+            videosink_options.append(" fullscreen-toggle-mode=GST_D3D11_WINDOW_FULLSCREEN_TOGGLE_MODE_PROPERTY fullscreen=TRUE ");
         } else {
             videosink_options.append(" fullscreen-toggle-mode=GST_D3D11_WINDOW_FULLSCREEN_TOGGLE_MODE_ALT_ENTER ");
             LOGI("Use Alt-Enter key combination to toggle into/out of full-screen mode");
@@ -2696,7 +2696,7 @@ int main (int argc, char *argv[]) {
 
     if (videosink == "d3d12videosink"  && videosink_options.empty() && use_video) {
         if (fullscreen) {
-            videosink_options.append("fullscreen=TRUE");
+            videosink_options.append(" fullscreen=TRUE ");
         } else {
             videosink_options.append(" fullscreen-on-alt-enter=TRUE ");
             LOGI("Use Alt-Enter key combination to toggle into/out of full-screen mode");
