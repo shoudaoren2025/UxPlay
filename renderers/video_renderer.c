@@ -425,17 +425,19 @@ void video_renderer_init(logger_t *render_logger, const char *server_name, video
         renderer_type[i]->bus = gst_element_get_bus(renderer_type[i]->pipeline);	
         gst_element_set_state (renderer_type[i]->pipeline, GST_STATE_READY);
         GstState state;
-        if (gst_element_get_state (renderer_type[i]->pipeline, &state, NULL, 100 * GST_MSECOND)) {
-            if (state == GST_STATE_READY) {
-                logger_log(logger, LOGGER_DEBUG, "Initialized GStreamer video renderer %d", i + 1);
-                if (hls_video && i == 0) {
-                    renderer = renderer_type[i];
-                }
-            } else {
-                logger_log(logger, LOGGER_ERR, "Failed to initialize GStreamer video renderer %d", i + 1);
+        GstStateChangeReturn ret = gst_element_get_state (renderer_type[i]->pipeline, &state, NULL, 100 * GST_MSECOND);
+        if (ret == GST_STATE_CHANGE_SUCCESS) {
+            logger_log(logger, LOGGER_DEBUG, "Initialized GStreamer video renderer %d", i + 1);
+            if (hls_video && i == 0) {
+                renderer = renderer_type[i];
             }
         } else {
             logger_log(logger, LOGGER_ERR, "Failed to initialize GStreamer video renderer %d", i + 1);
+            logger_log(logger, LOGGER_INFO, "\nPerhaps your GStreamer installation is missing some required plugins,"
+                       "\nor your choices of video options (-vs -vd -vc -fs etc.) are incompatible on"
+                       "\nthis computer architecture.  (An example: kmssink with fullscreen option -fs"
+                       "\nmay work on some systems, but fail on others)");
+            exit(1);
         }
     }
 }
