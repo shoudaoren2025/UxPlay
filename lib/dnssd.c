@@ -413,6 +413,13 @@ dnssd_register_airplay(dnssd_t *dnssd, unsigned short port)
 }
 
 const char *
+dnssd_get_raop_txt(dnssd_t *dnssd, int *length)
+{
+    *length = dnssd->TXTRecordGetLength(&dnssd->raop_record);
+    return dnssd->TXTRecordGetBytesPtr(&dnssd->raop_record);
+}
+
+const char *
 dnssd_get_airplay_txt(dnssd_t *dnssd, int *length)
 {
     *length = dnssd->TXTRecordGetLength(&dnssd->airplay_record);

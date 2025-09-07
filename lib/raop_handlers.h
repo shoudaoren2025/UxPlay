@@ -32,6 +32,14 @@
 typedef void (*raop_handler_t)(raop_conn_t *, http_request_t *,
                                http_response_t *, char **, int *);
 
+#ifndef PLIST_230
+void plist_mem_free(void* ptr) {
+    if (ptr) {
+        free(ptr);
+    }
+}
+#endif
+
 static void
 raop_handler_info(raop_conn_t *conn,
                   http_request_t *request, http_response_t *response,
@@ -39,11 +47,27 @@ raop_handler_info(raop_conn_t *conn,
 {
     assert(conn->raop->dnssd);
 
-#if 0
-    /* initial GET/info request sends plist with string "txtAirPlay" */
-    bool txtAirPlay = false;
+    /* There are three possible RTSP/1.0  GET/info requests
+       (1) with a CSeq number and with a plist
+       (2) with a CSeq number and without a plist
+       (3) without a CSeq number or a Header (part of Bluetooth LE Service Discovery) */
+
+    const char* url =  NULL;
     const char* content_type =  NULL;
+    const char* cseq =  NULL;
+    url  = http_request_get_url(request);
     content_type = http_request_get_header(request, "Content-Type");
+    cseq = http_request_get_header(request, "CSeq");
+    int len;
+    bool add_txt_airplay = false;
+    bool add_txt_raop = false;
+    const char txtRAOP[] = "txtRAOP";
+    const char txtAirPlay[] = "txtAirPlay";
+
+
+    plist_t res_node = plist_new_dict();
+     
+    /* initial GET/info request sends plist with string "txtAirPlay" */
     if (content_type && strstr(content_type, "application/x-apple-binary-plist")) {
         char *qualifier_string = NULL;
         const char *data = NULL;
@@ -57,17 +81,40 @@ raop_handler_info(raop_conn_t *conn,
             plist_t req_string_node = plist_array_get_item(req_qualifier_node, 0);
             plist_get_string_val(req_string_node, &qualifier_string);
         }
-        if (qualifier_string && !strcmp(qualifier_string, "txtAirPlay")) {
-	    printf("qualifier: %s\n", qualifier_string);
-	    txtAirPlay = true;
-        }
         if (qualifier_string) {
-            free(qualifier_string);
+            if (!strcmp(qualifier_string, txtAirPlay )) {
+                add_txt_airplay = true;
+            } else if (!strcmp(qualifier_string, txtRAOP)) {
+                add_txt_raop = true;
+            }
+            plist_mem_free(qualifier_string);
         }
     }
-#endif
-    plist_t res_node = plist_new_dict();
+    
 
+    /* Bluetoth LE discovery protocol request */
+    if (!cseq) {
+        add_txt_airplay = (bool) strstr(url, txtAirPlay);
+        add_txt_raop = (bool) strstr(url, txtRAOP);
+    }
+    
+    if (add_txt_airplay) {
+        const char *txt = dnssd_get_airplay_txt(conn->raop->dnssd, &len);
+        plist_t txt_airplay_node = plist_new_data(txt, len);
+        plist_dict_set_item(res_node, txtAirPlay, txt_airplay_node);
+    }
+
+    if (add_txt_raop) {
+        const char *txt = dnssd_get_raop_txt(conn->raop->dnssd, &len);
+        plist_t txt_raop_node = plist_new_data(txt, len);
+        plist_dict_set_item(res_node, txtRAOP, txt_raop_node);
+    }
+  
+    /* don't need anything below here in the response to initial  "txtAirPlay" GET/info request */
+    if (content_type) {
+        goto finished;
+    }
+ 
     /* deviceID is the physical hardware address, and will not change */
     int hw_addr_raw_len = 0;
     const char *hw_addr_raw = dnssd_get_hw_addr(conn->raop->dnssd, &hw_addr_raw_len);
@@ -77,17 +124,16 @@ raop_handler_info(raop_conn_t *conn,
     plist_t device_id_node = plist_new_string(hw_addr);
     plist_dict_set_item(res_node, "deviceID", device_id_node);
 
+    plist_t mac_address_node = plist_new_string(hw_addr);
+    plist_dict_set_item(res_node, "macAddress", mac_address_node);
+    free(hw_addr);
+   
     /* Persistent Public Key */
     int pk_len = 0;
     char *pk = utils_parse_hex(conn->raop->pk_str, strlen(conn->raop->pk_str), &pk_len);
     plist_t pk_node = plist_new_data(pk, pk_len);
     plist_dict_set_item(res_node, "pk", pk_node);
-
-    /* airplay_txt is from the _airplay._tcp  dnssd announuncement, may not be necessary */
-    int airplay_txt_len = 0;
-    const char *airplay_txt = dnssd_get_airplay_txt(conn->raop->dnssd, &airplay_txt_len);
-    plist_t txt_airplay_node = plist_new_data(airplay_txt, airplay_txt_len);
-    plist_dict_set_item(res_node, "txtAirPlay", txt_airplay_node);
+    free(pk);
 
     uint64_t features = dnssd_get_airplay_features(conn->raop->dnssd);
     plist_t features_node = plist_new_uint(features);
@@ -97,6 +143,32 @@ raop_handler_info(raop_conn_t *conn,
     const char *name = dnssd_get_name(conn->raop->dnssd, &name_len);
     plist_t name_node = plist_new_string(name);
     plist_dict_set_item(res_node, "name", name_node);
+
+    plist_t pi_node = plist_new_string(AIRPLAY_PI);
+    plist_dict_set_item(res_node, "pi", pi_node);
+
+    plist_t vv_node = plist_new_uint(strtol(AIRPLAY_VV, NULL, 10));
+    plist_dict_set_item(res_node, "vv", vv_node);
+
+    plist_t status_flags_node = plist_new_uint(68);
+    plist_dict_set_item(res_node, "statusFlags", status_flags_node);
+
+    plist_t keep_alive_low_power_node = plist_new_uint(1);
+    plist_dict_set_item(res_node, "keepAliveLowPower", keep_alive_low_power_node);
+
+    plist_t source_version_node = plist_new_string(GLOBAL_VERSION);
+    plist_dict_set_item(res_node, "sourceVersion", source_version_node);
+
+    plist_t keep_alive_send_stats_as_body_node = plist_new_bool(1);
+    plist_dict_set_item(res_node, "keepAliveSendStatsAsBody", keep_alive_send_stats_as_body_node);
+
+    plist_t model_node = plist_new_string(GLOBAL_MODEL);
+    plist_dict_set_item(res_node, "model", model_node);
+
+    /* dont need anything below here in the Bluetooth LE response */
+    if (cseq == NULL) {
+        goto finished;
+    }
 
     plist_t audio_latencies_node = plist_new_array();
     plist_t audio_latencies_0_node = plist_new_dict();
@@ -142,30 +214,6 @@ raop_handler_info(raop_conn_t *conn,
     plist_array_append_item(audio_formats_node, audio_format_1_node);
     plist_dict_set_item(res_node, "audioFormats", audio_formats_node);
 
-    plist_t pi_node = plist_new_string(AIRPLAY_PI);
-    plist_dict_set_item(res_node, "pi", pi_node);
-
-    plist_t vv_node = plist_new_uint(strtol(AIRPLAY_VV, NULL, 10));
-    plist_dict_set_item(res_node, "vv", vv_node);
-
-    plist_t status_flags_node = plist_new_uint(68);
-    plist_dict_set_item(res_node, "statusFlags", status_flags_node);
-
-    plist_t keep_alive_low_power_node = plist_new_uint(1);
-    plist_dict_set_item(res_node, "keepAliveLowPower", keep_alive_low_power_node);
-
-    plist_t source_version_node = plist_new_string(GLOBAL_VERSION);
-    plist_dict_set_item(res_node, "sourceVersion", source_version_node);
-
-    plist_t keep_alive_send_stats_as_body_node = plist_new_bool(1);
-    plist_dict_set_item(res_node, "keepAliveSendStatsAsBody", keep_alive_send_stats_as_body_node);
-
-    plist_t model_node = plist_new_string(GLOBAL_MODEL);
-    plist_dict_set_item(res_node, "model", model_node);
-
-    plist_t mac_address_node = plist_new_string(hw_addr);
-    plist_dict_set_item(res_node, "macAddress", mac_address_node);
-
     plist_t displays_node = plist_new_array();
     plist_t displays_0_node = plist_new_dict();
     plist_t displays_0_width_physical_node = plist_new_uint(0);
@@ -196,11 +244,10 @@ raop_handler_info(raop_conn_t *conn,
     plist_array_append_item(displays_node, displays_0_node);
     plist_dict_set_item(res_node, "displays", displays_node);
 
+ finished:
     plist_to_bin(res_node, response_data, (uint32_t *) response_datalen);
     plist_free(res_node);
     http_response_add_header(response, "Content-Type", "application/x-apple-binary-plist");
-    free(pk);
-    free(hw_addr);
 }
 
 static void
@@ -280,7 +327,8 @@ raop_handler_pairsetup_pin(raop_conn_t *conn,
 	    plist_free (req_root_node);
             return;
         }
-        free (method);
+        plist_mem_free(method);
+        method = NULL;
         plist_get_string_val(req_user_node, &user);
         logger_log(conn->raop->logger, LOGGER_INFO, "pair-setup-pin:  device_id = %s", user);
         snprintf(pin, 6, "%04u", conn->raop->pin % 10000);
@@ -289,7 +337,8 @@ raop_handler_pairsetup_pin(raop_conn_t *conn,
         }
         int ret = srp_new_user(conn->session, conn->raop->pairing, (const char *) user,
                                (const char *) pin, &salt, &len_salt, &pk, &len_pk);
-        free(user);	
+        plist_mem_free(user);
+        user = NULL;
         plist_free(req_root_node);
         if (ret < 0) {
             logger_log(conn->raop->logger, LOGGER_ERR, "failed to create user, err = %d", ret);
@@ -711,18 +760,12 @@ raop_handler_setup(raop_conn_t *conn,
                 free (client_pk);
             }
         }
-        if (deviceID) {
-            free (deviceID);
-            deviceID = NULL;
-        }
-        if (model) {
-            free (model);
-            model = NULL;
-        }
-        if (name) {
-            free (name);
-            name = NULL;
-        }
+        plist_mem_free(deviceID);
+        deviceID = NULL;
+        plist_mem_free(model);
+        model = NULL;
+        plist_mem_free(name);
+        name = NULL;
         if (admit_client == false) {
             /* client is not authorized to connect */
             plist_free(res_root_node);
@@ -834,7 +877,7 @@ raop_handler_setup(raop_conn_t *conn,
                  logger_log(conn->raop->logger, LOGGER_ERR, "Client specified timingProtocol=%s,"
                             " but timingProtocol= NTP is required here", timing_protocol);
              }
-             free (timing_protocol);
+             plist_mem_free (timing_protocol);
              timing_protocol = NULL;
         } else {
             logger_log(conn->raop->logger, LOGGER_DEBUG, "Client did not specify timingProtocol,"
@@ -1133,9 +1176,7 @@ raop_handler_audiomode(raop_conn_t *conn,
     /* not sure what should be done with this request: usually audioMode requested is "default" */
     int log_level = (strstr(audiomode, "default") ? LOGGER_DEBUG : LOGGER_INFO);
     logger_log(conn->raop->logger, log_level, "Unhandled RTSP request \"audioMode: %s\"", audiomode);
-    if (audiomode) {
-        free(audiomode);
-    }
+    plist_mem_free(audiomode);
     plist_free(req_root_node);
 }
 
