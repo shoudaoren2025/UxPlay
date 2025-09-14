@@ -411,9 +411,13 @@ http_handler_action(raop_conn_t *conn, http_request_t *request, http_response_t 
     char *type = NULL;
     plist_get_string_val(req_type_node, &type);
     logger_log(conn->raop->logger, LOGGER_DEBUG, "action type is %s", type);
-    if (strstr(type, "unhandledURLResponse")) {
+    bool unhandled_url_response = strstr(type, "unhandledURLResponse");
+    bool playlist_remove = strstr(type, "playlistRemove");
+    bool playlist_insert = strstr(type, "playlistInsert");
+    plist_mem_free(type);
+    if (unhandled_url_response) {
         goto unhandledURLResponse;      
-    } else if (strstr(type, "playlistRemove")) {
+    } else if (playlist_remove) {
         logger_log(conn->raop->logger, LOGGER_INFO, "unhandled action type playlistRemove (stop playback)");
         req_params_node = plist_dict_get_item(req_root_node, "params");    
         if (!req_params_node || !PLIST_IS_DICT (req_params_node)) {
@@ -436,11 +440,11 @@ http_handler_action(raop_conn_t *conn, http_request_t *request, http_response_t 
             } else {
                 logger_log(conn->raop->logger, LOGGER_DEBUG, "removal_uuid matches playback_uuid\n");
             }
-            free (remove_uuid);
+            plist_mem_free (remove_uuid);
         }
         logger_log(conn->raop->logger, LOGGER_ERR, "FIXME: playlist removal not yet implemented");
         goto finish;
-    } else if (strstr(type, "playlistInsert")) {
+    } else if (playlist_insert) {
         logger_log(conn->raop->logger, LOGGER_INFO, "unhandled action type playlistInsert (add new playback)");
         printf("\n***************FIXME************************\nPlaylist insertion needs more information for it to be implemented:\n"
                "please report following output as an \"Issue\" at http://github.com/FDH2/UxPlay:\n");
@@ -518,12 +522,14 @@ http_handler_action(raop_conn_t *conn, http_request_t *request, http_response_t 
     char *fcup_response_url = NULL;
     plist_get_string_val(req_params_fcup_response_url_node, &fcup_response_url);
     if (!fcup_response_url) {
+        plist_mem_free(fcup_response_url);
         goto post_action_error;
     }
     logger_log(conn->raop->logger, LOGGER_DEBUG, "FCUP_Response_URL =  %s", fcup_response_url);
 	
     plist_t req_params_fcup_response_data_node = plist_dict_get_item(req_params_node, "FCUP_Response_Data");
     if (!PLIST_IS_DATA(req_params_fcup_response_data_node)){
+        plist_mem_free(fcup_response_url);
         goto post_action_error;
     }
 
@@ -534,6 +540,7 @@ http_handler_action(raop_conn_t *conn, http_request_t *request, http_response_t 
 
     if (!fcup_response_data) {
 	free (fcup_response_url);
+        plist_mem_free(fcup_response_url);
 	goto post_action_error;
     } 
 
@@ -581,9 +588,7 @@ http_handler_action(raop_conn_t *conn, http_request_t *request, http_response_t 
     if (fcup_response_data) {
         free (fcup_response_data);
     }
-    if (fcup_response_url) {
-        free (fcup_response_url);
-    }
+    plist_mem_free(fcup_response_url);
 
     int num_uri = get_num_media_uri(conn->raop->airplay_video);
     int uri_num = get_next_media_uri_id(conn->raop->airplay_video);
@@ -680,7 +685,7 @@ http_handler_play(raop_conn_t *conn, http_request_t *request, http_response_t *r
             char* playback_uuid = NULL;
             plist_get_string_val(req_uuid_node, &playback_uuid);
             set_playback_uuid(conn->raop->airplay_video, playback_uuid);
-            free (playback_uuid);
+            plist_mem_free (playback_uuid);
         }
 
         plist_t req_content_location_node = plist_dict_get_item(req_root_node, "Content-Location");
@@ -699,6 +704,7 @@ http_handler_play(raop_conn_t *conn, http_request_t *request, http_response_t *r
                 logger_log(conn->raop->logger, LOGGER_WARNING, "Unsupported HLS streaming format: clientProcName %s not found in supported list: %s",
                            client_proc_name, supported_hls_proc_names);
             }
+	    plist_mem_free(client_proc_name);
         }
 	
         plist_t req_start_position_seconds_node = plist_dict_get_item(req_root_node, "Start-Position-Seconds");
@@ -722,9 +728,7 @@ http_handler_play(raop_conn_t *conn, http_request_t *request, http_response_t *r
     set_next_media_uri_id(conn->raop->airplay_video, 0);
     fcup_request((void *) conn, playback_location, apple_session_id, get_next_FCUP_RequestID(conn->raop->airplay_video));
 
-    if (playback_location) {
-        free (playback_location);
-    }
+    plist_mem_free(playback_location);
 
     if (req_root_node) {
         plist_free(req_root_node);
@@ -732,6 +736,7 @@ http_handler_play(raop_conn_t *conn, http_request_t *request, http_response_t *r
     return;
 
  play_error:;
+    plist_mem_free(playback_location);
     if (req_root_node) {
         plist_free(req_root_node);
     }
