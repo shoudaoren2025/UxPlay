@@ -268,6 +268,7 @@ httpd_accept_connection(httpd_t *httpd, int server_fd, int is_ipv6)
     struct sockaddr_storage local_saddr;
     socklen_t local_saddrlen;
     unsigned char *local, *remote;
+    unsigned short port;
     unsigned int local_zone_id, remote_zone_id;
     int local_len, remote_len;
     int ret, fd;
@@ -287,10 +288,10 @@ httpd_accept_connection(httpd_t *httpd, int server_fd, int is_ipv6)
         return 0;
     }
 
-    logger_log(httpd->logger, LOGGER_INFO, "Accepted %s client on socket %d",
-               (is_ipv6 ? "IPv6"  : "IPv4"), fd);
-    local = netutils_get_address(&local_saddr, &local_len, &local_zone_id);
-    remote = netutils_get_address(&remote_saddr, &remote_len, &remote_zone_id);
+    local = netutils_get_address(&local_saddr, &local_len, &local_zone_id, &port);   
+    logger_log(httpd->logger, LOGGER_INFO, "Accepted %s client on socket %d, port %u",
+               (is_ipv6 ? "IPv6"  : "IPv4"), fd, port);
+    remote = netutils_get_address(&remote_saddr, &remote_len, &remote_zone_id, NULL);
     assert (local_zone_id == remote_zone_id);
 
     ret = httpd_add_connection(httpd, fd, local, local_len, remote, remote_len, local_zone_id);
