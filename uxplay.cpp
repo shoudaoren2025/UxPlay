@@ -63,6 +63,7 @@
 #include "lib/stream.h"
 #include "lib/logger.h"
 #include "lib/dnssd.h"
+#include "lib/crypto.h"
 #include "renderers/video_renderer.h"
 #include "renderers/audio_renderer.h"
 #ifdef DBUS
@@ -784,10 +785,6 @@ static std::string find_mac () {
     return mac;
 }
 
-#define MULTICAST 0
-#define LOCAL 1
-#define OCTETS 6
-
 static bool validate_mac(char * mac_address) {
     char c;
     if (strlen(mac_address) != 17)  return false;
@@ -806,16 +803,16 @@ static bool validate_mac(char * mac_address) {
 }
 
 static std::string random_mac () {
-    char str[3];
-    int octet = rand() % 64;
-    octet = (octet << 1) + LOCAL;
-    octet = (octet << 1) + MULTICAST;
-    snprintf(str,3,"%02x",octet);
+    char str[4];
+    unsigned char random[6];
+    get_random_bytes(random, sizeof(random));
+    /* mark MAC address as locally administered, i.e. random */
+    random[0] = random[0] & ~0x01;
+    random[0] = random[0] | 0x02;
+    snprintf(str,3,"%2.2x", random[0]);
     std::string mac_address(str);
-    for (int i = 1; i < OCTETS; i++) {
-        mac_address = mac_address + ":";
-        octet =  rand() % 256;
-        snprintf(str,3,"%02x",octet);
+    for (int i = 1; i < 6; i++) {
+        snprintf(str,4,":%2.2x", random[i]);
         mac_address = mac_address + str;
     }
     return mac_address;
@@ -2806,7 +2803,6 @@ int main (int argc, char *argv[]) {
         }
     }
     if (mac_address.empty()) {
-        srand(time(NULL) * getpid());
         mac_address = random_mac();
         LOGI("using randomly-generated MAC address %s",mac_address.c_str());
     }
