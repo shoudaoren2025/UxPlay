@@ -60,8 +60,33 @@ jobs:
           cd build
           cmake --install . --prefix ./install
 
-      - name: Upload uxplay.exe artifact
+      - name: Copy required DLLs
+        shell: pwsh
+        run: |
+          $dlls = @(
+            "libglib-2.0-0.dll",
+            "libintl-8.dll",
+            "libiconv-2.dll",
+            "libgobject-2.0-0.dll",
+            "libgstreamer-1.0-0.dll",
+            "libgstbase-1.0-0.dll",
+            "libgstvideo-1.0-0.dll",
+            "libgstaudio-1.0-0.dll",
+            "libgstapp-1.0-0.dll"
+          )
+          foreach ($dll in $dlls) {
+            $src = "C:/msys64/ucrt64/bin/$dll"
+            $dst = "build/install/bin/$dll"
+            if (Test-Path $src) {
+              Copy-Item $src $dst -Force
+              echo "Copied $dll"
+            } else {
+              echo "Warning: $dll not found in $src"
+            }
+          }
+
+      - name: Upload uxplay.exe + DLLs
         uses: actions/upload-artifact@v4
         with:
           name: uxplay-windows
-          path: build/install/bin/uxplay.exe
+          path: build/install/bin/
