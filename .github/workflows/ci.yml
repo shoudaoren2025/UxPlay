@@ -1,0 +1,66 @@
+name: Build UxPlay (Windows UCRT64)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up MSYS2 (UCRT64)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            git
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-openssl
+            mingw-w64-ucrt-x86_64-libplist
+            mingw-w64-ucrt-x86_64-gstreamer
+            mingw-w64-ucrt-x86_64-gst-plugins-base
+            mingw-w64-ucrt-x86_64-gst-plugins-good
+            mingw-w64-ucrt-x86_64-gst-plugins-bad
+            man
+
+      # ⚠️ Bonjour SDK 无法自动下载安装，需要你自己处理
+      # 方法 1：把 Bonjour SDK 解压后放到项目的 `third_party/BonjourSDK` 目录
+      # 方法 2：在 GitHub Action Secrets 里提供下载链接，在这里 curl + unzip
+      - name: Set BONJOUR_SDK_HOME
+        run: echo "BONJOUR_SDK_HOME=C:/Program Files/Bonjour SDK" >> $env:GITHUB_ENV
+        shell: pwsh
+
+      - name: Configure build
+        shell: msys2 {0}
+        run: |
+          mkdir -p build
+          cd build
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ..
+
+      - name: Build
+        shell: msys2 {0}
+        run: |
+          cd build
+          ninja
+
+      - name: Install (local to artifact dir)
+        shell: msys2 {0}
+        run: |
+          cd build
+          cmake --install . --prefix ./install
+
+      - name: Upload uxplay.exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: uxplay-windows
+          path: build/install/bin/uxplay.exe
