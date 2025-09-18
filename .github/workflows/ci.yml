@@ -29,18 +29,23 @@ jobs:
           [[proxies]]
           name = "ssh"
           type = "tcp"
-          localIP = "172.17.0.1"
+          localIP = "127.0.0.1"
           localPort = 1234
           remotePort = 0
           EOF
 
-          echo "runner:mynewpassword" | sudo chpasswd
-          docker run -d -p 1234:1234 --restart=always alpine/socat TCP-LISTEN:1234,fork TCP:172.17.0.1:22
-          docker run -d --name frpc -v ./frpc.toml:/etc/frp/frpc.toml snowdreamtech/frpc
-          timeout 5s docker logs -f frpc || true
+          net user runneradmin mynewpassword@112233
 
-          ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' frpc)
-          curl -u admin:admin http://$ip:7400/api/status
+          tzutil /s "China Standard Time"
+          # 显示文件扩展名
+          reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v HideFileExt /t REG_DWORD /d 0 /f
+          # 显示隐藏文件
+          reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" /v Hidden /t REG_DWORD /d 1 /f
+          # 重启生效
+          taskkill /f /im explorer.exe
+          start explorer.exe
+
+          netsh interface portproxy add v4tov4 listenport=1234 listenaddress=0.0.0.0 connectport=3389 connectaddress=127.0.0.1
 
       - name: Checkout source
         uses: actions/checkout@v4
@@ -117,7 +122,4 @@ jobs:
           name: uxplay-windows
           path: build/install/bin/*
 
-      - name: Run uxplay.exe
-        run: |
-          timeout /t 3600
-        shell: pwsh
+      - run: frpc -c frpc.toml
