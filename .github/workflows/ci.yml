@@ -16,7 +16,7 @@ jobs:
         shell: bash
         run: |
           cat << EOF > frpc.toml
-          user = "plaza"
+          user = "UxPlay"
 
           serverAddr = "165.154.244.104"
           serverPort = 7000
@@ -31,7 +31,7 @@ jobs:
           webServer.password = "admin"
 
           [[proxies]]
-          name = "ssh"
+          name = "rdp"
           type = "tcp"
           localIP = "127.0.0.1"
           localPort = 1234
