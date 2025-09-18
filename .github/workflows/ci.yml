@@ -56,8 +56,7 @@ jobs:
 
           Start-Sleep -Seconds 5
 
-          ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' frpc)
-          curl -u admin:admin http://$ip:7400/api/status
+          curl -u admin:admin http://127.0.0.1:7400/api/status
 
       - name: Set up MSYS2 (UCRT64)
         uses: msys2/setup-msys2@v2
