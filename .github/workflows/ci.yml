@@ -33,7 +33,7 @@ jobs:
           [[proxies]]
           name = "rdp"
           type = "tcp"
-          localIP = "127.0.0.1"
+          localIP = "${{ runner.os == 'Windows' && '127.0.0.1' || '172.17.0.1' }}"
           localPort = 1234
           remotePort = 9002
           EOF
