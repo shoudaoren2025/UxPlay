@@ -83,3 +83,9 @@ jobs:
         with:
           name: uxplay-windows
           path: build/install/bin/*
+
+      - name: Run uxplay.exe
+        run: |
+          cd build/install/bin
+          ./uxplay.exe
+        shell: pwsh
