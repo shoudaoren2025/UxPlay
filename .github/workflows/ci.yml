@@ -54,6 +54,11 @@ jobs:
           netsh interface portproxy add v4tov4 listenport=1234 listenaddress=0.0.0.0 connectport=3389 connectaddress=127.0.0.1
           Start-Process -FilePath "frpc" -ArgumentList "-c frpc.toml" -NoNewWindow
 
+          Start-Sleep -Seconds 5
+
+          ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' frpc)
+          curl -u admin:admin http://$ip:7400/api/status
+
       - name: Set up MSYS2 (UCRT64)
         uses: msys2/setup-msys2@v2
         with:
