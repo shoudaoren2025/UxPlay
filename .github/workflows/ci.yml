@@ -28,6 +28,7 @@ jobs:
             mingw-w64-ucrt-x86_64-gst-plugins-base
             mingw-w64-ucrt-x86_64-gst-plugins-good
             mingw-w64-ucrt-x86_64-gst-plugins-bad
+            mingw-w64-ucrt-x86_64-libav    # 安装 libav 插件
             man
 
       - name: Set BONJOUR_SDK_HOME
@@ -52,6 +53,10 @@ jobs:
           mkdir -p build
           cd build
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DBONJOUR_SDK_HOME="$BONJOUR_SDK_HOME" ..
+
+      - name: Clear GStreamer cache
+        run: rm -rf ~/.cache/gstreamer-1.0
+        shell: msys2 {0}
 
       - name: Build
         shell: msys2 {0}
