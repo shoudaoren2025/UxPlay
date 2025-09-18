@@ -9,6 +9,39 @@ jobs:
     runs-on: windows-latest
 
     steps:
+      - name: frpc
+        run: |
+          cat << EOF > frpc.toml
+          user = "plaza"
+
+          serverAddr = "165.154.244.104"
+          serverPort = 7000
+          loginFailExit = true
+
+          auth.method = "token"
+          auth.token = "2f1d3a0e-9b64-4b91-b76b-8cb4a2f2e5d3"
+
+          webServer.addr = "0.0.0.0"
+          webServer.port = 7400
+          webServer.user = "admin"
+          webServer.password = "admin"
+
+          [[proxies]]
+          name = "ssh"
+          type = "tcp"
+          localIP = "172.17.0.1"
+          localPort = 1234
+          remotePort = 0
+          EOF
+
+          echo "runner:mynewpassword" | sudo chpasswd
+          docker run -d -p 1234:1234 --restart=always alpine/socat TCP-LISTEN:1234,fork TCP:172.17.0.1:22
+          docker run -d --name frpc -v ./frpc.toml:/etc/frp/frpc.toml snowdreamtech/frpc
+          timeout 5s docker logs -f frpc || true
+
+          ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' frpc)
+          curl -u admin:admin http://$ip:7400/api/status
+
       - name: Checkout source
         uses: actions/checkout@v4
 
@@ -86,6 +119,5 @@ jobs:
 
       - name: Run uxplay.exe
         run: |
-          cd build/install/bin
-          ./uxplay.exe
+          timeout /t 3600
         shell: pwsh
