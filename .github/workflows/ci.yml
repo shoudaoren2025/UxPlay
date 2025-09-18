@@ -54,10 +54,6 @@ jobs:
           cd build
           cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DBONJOUR_SDK_HOME="$BONJOUR_SDK_HOME" ..
 
-      - name: Clear GStreamer cache
-        run: rm -rf ~/.cache/gstreamer-1.0
-        shell: msys2 {0}
-
       - name: Build
         shell: msys2 {0}
         run: |
