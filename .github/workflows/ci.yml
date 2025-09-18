@@ -38,6 +38,11 @@ jobs:
         run: |
           mkdir "$env:BONJOUR_SDK_HOME"
           tar -xf "Bonjour SDK.zip" -C "$env:BONJOUR_SDK_HOME" --strip-components=1
+        shell: pwsh
+
+      - name: Show BONJOUR_SDK_HOME
+        run: |
+          echo "BONJOUR_SDK_HOME = $env:BONJOUR_SDK_HOME"
           dir "$env:BONJOUR_SDK_HOME"
         shell: pwsh
 
@@ -46,7 +51,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release ..
+          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DBONJOUR_SDK_HOME="$BONJOUR_SDK_HOME" ..
 
       - name: Build
         shell: msys2 {0}
@@ -60,32 +65,13 @@ jobs:
           cd build
           cmake --install . --prefix ./install
 
-      - name: Copy required DLLs
-        shell: pwsh
+      - name: Copy DLL dependencies
+        shell: msys2 {0}
         run: |
-          $dlls = @(
-            "libglib-2.0-0.dll",
-            "libintl-8.dll",
-            "libiconv-2.dll",
-            "libgobject-2.0-0.dll",
-            "libgstreamer-1.0-0.dll",
-            "libgstbase-1.0-0.dll",
-            "libgstvideo-1.0-0.dll",
-            "libgstaudio-1.0-0.dll",
-            "libgstapp-1.0-0.dll"
-          )
-          foreach ($dll in $dlls) {
-            $src = "C:/msys64/ucrt64/bin/$dll"
-            $dst = "build/install/bin/$dll"
-            if (Test-Path $src) {
-              Copy-Item $src $dst -Force
-              echo "Copied $dll"
-            } else {
-              echo "Warning: $dll not found in $src"
-            }
-          }
-
-          dir C:/msys64/ucrt64/bin
+          cd build/install/bin
+          echo ">>> 检查 uxplay.exe 依赖的 DLL..."
+          ldd uxplay.exe | grep "ucrt64/bin" | awk '{print $3}' | xargs -I {} cp {} .
+          echo ">>> 已复制 DLL 到安装目录"
 
       - name: Upload uxplay.exe + DLLs
         uses: actions/upload-artifact@v4
