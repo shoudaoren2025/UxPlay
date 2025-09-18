@@ -70,11 +70,15 @@ jobs:
         run: |
           cd build/install/bin
           echo ">>> 检查 uxplay.exe 依赖的 DLL..."
-          ldd uxplay.exe | grep "ucrt64/bin" | awk '{print $3}' | xargs -I {} cp {} .
+          # 获取并复制所有依赖的 DLL 文件
+          for dll in $(ldd uxplay.exe | grep "ucrt64/bin" | awk '{print $3}'); do
+            echo ">>> 复制 DLL: $dll"
+            cp "$dll" .
+          done
           echo ">>> 已复制 DLL 到安装目录"
 
       - name: Upload uxplay.exe + DLLs
         uses: actions/upload-artifact@v4
         with:
           name: uxplay-windows
-          path: build/install/bin/
+          path: build/install/bin/*
