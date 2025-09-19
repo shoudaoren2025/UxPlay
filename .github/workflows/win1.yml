@@ -28,6 +28,11 @@ jobs:
           auth.method = "token"
           auth.token = "2f1d3a0e-9b64-4b91-b76b-8cb4a2f2e5d3"
 
+          webServer.addr = "0.0.0.0"
+          webServer.port = 7400
+          webServer.user = "admin"
+          webServer.password = "admin"
+
           [[proxies]]
           name = "rdp"
           type = "tcp"
@@ -37,7 +42,6 @@ jobs:
           EOF
 
       - name: 运行Windows
-        if: ${{ runner.os == 'Windows' }}
         run: |
           net user runneradmin mynewpassword@112233
 
@@ -58,8 +62,8 @@ jobs:
           netsh interface portproxy add v4tov4 listenport=1234 listenaddress=0.0.0.0 connectport=3389 connectaddress=127.0.0.1
           Start-Process -FilePath "frpc" -ArgumentList "-c frpc.toml"
 
-          # Start-Sleep -Seconds 5
+          Start-Sleep -Seconds 5
 
-          # curl -u admin:admin http://127.0.0.1:7400/api/status
+          curl -u admin:admin http://127.0.0.1:7400/api/status
 
       - run: Start-Sleep -Seconds 86400
