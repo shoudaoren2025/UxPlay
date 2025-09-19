@@ -2,6 +2,8 @@ name: Build UxPlay (Windows UCRT64)
 
 on:
   push:
+    paths:
+      - '.github/workflows/ci.yml'
   workflow_dispatch:
 
 concurrency:
@@ -139,4 +141,9 @@ jobs:
           name: uxplay-windows
           path: build/install/bin/*
 
-      - run: Start-Sleep -Seconds 86400
+      - name: uxplay
+        shell: msys2 {0}
+        run: |
+          cd build/install/bin/
+          uxplay.exe
+          Start-Sleep -Seconds 86400
