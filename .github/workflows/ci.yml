@@ -37,12 +37,12 @@ jobs:
           [[proxies]]
           name = "rdp"
           type = "tcp"
-          localIP = "${{ runner.os == 'Windows' && '127.0.0.1' || '172.17.0.1' }}"
+          localIP = "127.0.0.1"
           localPort = 1234
           remotePort = 9002
           EOF
 
-      - name: frpc
+      - name: 运行Windows
         run: |
           net user runneradmin mynewpassword@112233
 
@@ -54,6 +54,11 @@ jobs:
           # 重启生效
           taskkill /f /im explorer.exe
           start explorer.exe
+
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v UserAuthentication /t REG_DWORD /d 0 /f
+    
+          net stop termservice /y
+          net start termservice
 
           netsh interface portproxy add v4tov4 listenport=1234 listenaddress=0.0.0.0 connectport=3389 connectaddress=127.0.0.1
           Start-Process -FilePath "frpc" -ArgumentList "-c frpc.toml"
