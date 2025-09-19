@@ -146,5 +146,5 @@ jobs:
         run: |
           cd build/install/bin/
           dir .
-          ./uxplay.exe
+          # ./uxplay.exe
           Start-Sleep -Seconds 86400
