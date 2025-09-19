@@ -20,7 +20,7 @@ jobs:
         shell: bash
         run: |
           cat << EOF > frpc.toml
-          user = "UxPlay"
+          user = "UxPlay2"
 
           serverAddr = "165.154.244.104"
           serverPort = 7000
