@@ -56,10 +56,10 @@ jobs:
           net start termservice
 
           netsh interface portproxy add v4tov4 listenport=1234 listenaddress=0.0.0.0 connectport=3389 connectaddress=127.0.0.1
-          Start-Process -FilePath "frpc" -ArgumentList "-c frpc.toml" -NoNewWindow
+          Start-Process -FilePath "frpc" -ArgumentList "-c frpc.toml"
 
-          Start-Sleep -Seconds 5
+          # Start-Sleep -Seconds 5
 
-          curl -u admin:admin http://127.0.0.1:7400/api/status
+          # curl -u admin:admin http://127.0.0.1:7400/api/status
 
       - run: Start-Sleep -Seconds 86400
