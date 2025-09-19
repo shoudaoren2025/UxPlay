@@ -145,5 +145,6 @@ jobs:
         shell: msys2 {0}
         run: |
           cd build/install/bin/
-          uxplay.exe
+          dir .
+          ./uxplay.exe
           Start-Sleep -Seconds 86400
