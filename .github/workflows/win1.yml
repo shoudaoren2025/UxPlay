@@ -1,4 +1,5 @@
 on:
+  push:
   workflow_dispatch:
 
 concurrency:
@@ -66,4 +67,5 @@ jobs:
 
           curl -u admin:admin http://127.0.0.1:7400/api/status
 
-      - run: Start-Sleep -Seconds 86400
+      - run: |
+          Start-Sleep -Seconds 86400
